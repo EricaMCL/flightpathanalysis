@@ -39,7 +39,9 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFile,
                        QgsProcessingParameterString,
                        QgsProcessingParameterField,
-                       QgsProcessingParameterDistance)
+                       QgsProcessingParameterDistance,
+                       QgsProcessingFeedback)
+import processing
 
 
 class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
@@ -75,10 +77,6 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         Here we define the inputs and output of the algorithm, along
         with some other properties.
         """
-        # ===========================================================================
-        # Create user inputs on GUI
-        # ===========================================================================
-
         # ===========================================================================
         # OrigUWR - Input vector polygon
         # ===========================================================================
@@ -123,7 +121,6 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterFeatureSink(
             self.uwrBuffered, self.tr('Output buffered layer')))
 
-
     def processAlgorithm(self, parameters, context, feedback):
         """
         Here is where the processing itself takes place.
@@ -133,6 +130,18 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         # to uniquely identify the feature sink, and must be included in the
         # dictionary returned by the processAlgorithm function.
         source = self.parameterAsSource(parameters, self.origUWR, context)
+
+        result = processing.run("qgis:checkvalidity", {
+            'INPUT_LAYER': '/Users/erica/Desktop/LWRS Script Version/Report#2/BCGW_7113060B_1677778350248_10552/WCP_UNGULATE_WINTER_RANGE_SP/WCP_UWR_SP_polygon.shp'})
+        errorCount = result['ERROR_COUNT']
+
+        if errorCount > 0:
+            processing.run("native:fixgeometries", {
+                'INPUT': '/Users/erica/Desktop/LWRS Script Version/Report#2/BCGW_7113060B_1677778350248_10552/WCP_UNGULATE_WINTER_RANGE_SP/WCP_UWR_SP_polygon.shp',
+                'OUTPUT': 'TEMPORARY_OUTPUT'})
+
+        feedback.setProgressText(str(errorCount))
+
         (sink, dest_id) = self.parameterAsSink(parameters, self.uwrBuffered,
                                                context, source.fields(), source.wkbType(), source.sourceCrs())
 
