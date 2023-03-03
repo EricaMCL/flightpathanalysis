@@ -56,8 +56,8 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
     # used when calling the algorithm from another algorithm, or when
     # calling from the QGIS console.
 
-    OUTPUT = 'OUTPUT'
-    INPUT = 'INPUT'
+    origUWR = 'OrigUWR'
+    DEM = 'DEM'
 
     def initAlgorithm(self, config):
         """
@@ -69,9 +69,17 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         # geometry.
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.INPUT,
-                self.tr('Input layer'),
-                [QgsProcessing.TypeVectorAnyGeometry]
+                self.origUWR,
+                self.tr('Input original UWR'),
+                [QgsProcessing.TypeVectorPolygon]
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterFeatureSource(
+                self.DEM,
+                self.tr('Input project DEM'),
+                [QgsProcessing.TypeRaster]
             )
         )
 
