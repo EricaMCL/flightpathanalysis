@@ -69,85 +69,60 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
     buffDistIS_high = 'buffDistIS_high'
     buffDistIS_moderate = 'buffDistIS_moderate'
     buffDistIS_low = 'buffDistIS_low'
+
     def initAlgorithm(self, config):
         """
         Here we define the inputs and output of the algorithm, along
         with some other properties.
         """
+        # ===========================================================================
+        # Create user inputs on GUI
+        # ===========================================================================
 
-        # We add the input vector features source. It can have any kind of
-        # geometry.
-        self.addParameter(
-            QgsProcessingParameterFeatureSource(
-                self.origUWR,
-                self.tr('Input original UWR'),
-                [QgsProcessing.TypeVectorPolygon]
-            )
-        )
+        # ===========================================================================
+        # OrigUWR - Input vector polygon
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterFeatureSource(
+            self.origUWR, self.tr('Input original UWR'), [QgsProcessing.TypeVectorPolygon]))
+        # ===========================================================================
+        # DEM - Input Raster
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterFeatureSource(
+            self.DEM, self.tr('Input project DEM'), [QgsProcessing.TypeRaster]))
+        # ===========================================================================
+        # gpx - Input Folder
+        # will loop through all the gpx files under the folder
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterFile(
+            self.gpxFolder, self.tr('Input gpx folder'), QgsProcessingParameterFile.Folder,
+            defaultValue='/Users/erica/Desktop/LWRS Script Version/Report#1/mountaingoatflightlinesamplegpxfiles'))
+        # ===========================================================================
+        # unit_id / unit_id_no - Input string
+        # User selects from the field list derived from OrigUWR
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterField(
+            self.unit_id, self.tr('Input unit id field, column has text like u-2-002'), 'unit_id', self.origUWR))
 
-        self.addParameter(
-            QgsProcessingParameterFeatureSource(
-                self.DEM,
-                self.tr('Input project DEM'),
-                [QgsProcessing.TypeRaster]
-            )
-        )
+        self.addParameter(QgsProcessingParameterField(
+            self.unit_id_no, self.tr('Input unit id field, column has text like Mg-059'), 'unit_id', self.origUWR))
+        # ===========================================================================
+        # bufferDistIS_high/moderate/low - Input string, with default value 500/1000/1500
+        # three buffer range represents different incursion severity range
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterString(
+            self.buffDistIS_high, self.tr('Buffer distance - High Incursion Severity'), 500))
 
-        self.addParameter(
-            QgsProcessingParameterFile(
-                self.gpxFolder,
-                self.tr('Input gpx folder'),
-                QgsProcessingParameterFile.Folder,
-                defaultValue='/Users/erica/Desktop/LWRS Script Version/Report#1/mountaingoatflightlinesamplegpxfiles'
-            )
-        )
+        self.addParameter(QgsProcessingParameterString(
+            self.buffDistIS_moderate, self.tr('Buffer distance - Moderate Incursion Severity'), 1000))
 
-        self.addParameter(
-            QgsProcessingParameterField(
-                self.unit_id,
-                self.tr('Input unit id field, column has text like u-2-002'),
-                'unit_id', self.origUWR
-            )
-        )
+        self.addParameter(QgsProcessingParameterString(
+            self.buffDistIS_low, self.tr('Buffer distance - Low Incursion Severity'), 1500))
+        # ===========================================================================
+        # uwrBuffered - output buffered layer
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterFeatureSink(
+            self.uwrBuffered, self.tr('Output buffered layer')))
 
-        self.addParameter(
-            QgsProcessingParameterField(
-                self.unit_id_no,
-                self.tr('Input unit id field, column has text like Mg-059'),
-                'unit_id', self.origUWR
-            )
-        )
-
-        self.addParameter(
-            QgsProcessingParameterString(
-                self.buffDistIS_high,
-                self.tr('Buffer distance - High Incursion Severity'), 500
-            )
-        )
-
-        self.addParameter(
-            QgsProcessingParameterString(
-                self.buffDistIS_moderate,
-                self.tr('Buffer distance - Moderate Incursion Severity'), 1000
-            )
-        )
-
-        self.addParameter(
-            QgsProcessingParameterString(
-                self.buffDistIS_low,
-                self.tr('Buffer distance - Low Incursion Severity'), 1500
-            )
-        )
-
-        # We add a feature sink in which to store our processed features (this
-        # usually takes the form of a newly created vector layer when the
-        # algorithm is run in QGIS).
-        self.addParameter(
-            QgsProcessingParameterFeatureSink(
-                self.uwrBuffered,
-                self.tr('Output buffered layer')
-            )
-        )
 
     def processAlgorithm(self, parameters, context, feedback):
         """
@@ -159,9 +134,7 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         # dictionary returned by the processAlgorithm function.
         source = self.parameterAsSource(parameters, self.origUWR, context)
         (sink, dest_id) = self.parameterAsSink(parameters, self.uwrBuffered,
-                context, source.fields(), source.wkbType(), source.sourceCrs())
-
-
+                                               context, source.fields(), source.wkbType(), source.sourceCrs())
 
         # Compute the number of steps to display within the progress bar and
         # get features from source
