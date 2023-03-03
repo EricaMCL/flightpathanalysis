@@ -35,7 +35,9 @@ from qgis.core import (QgsProcessing,
                        QgsFeatureSink,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,
-                       QgsProcessingParameterFeatureSink)
+                       QgsProcessingParameterFeatureSink,
+                       QgsProcessingParameterFile,
+                       QgsMessageLog)
 
 
 class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
@@ -58,7 +60,8 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
 
     origUWR = 'OrigUWR'
     DEM = 'DEM'
-
+    gpxFolder = 'gpxFolder'
+    uwrBuffered = 'uwrBuffered'
     def initAlgorithm(self, config):
         """
         Here we define the inputs and output of the algorithm, along
@@ -83,13 +86,21 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
             )
         )
 
+        self.addParameter(
+            QgsProcessingParameterFile(
+                self.gpxFolder,
+                self.tr('Input gpx folder'),
+                QgsProcessingParameterFile.Folder
+            )
+        )
+
         # We add a feature sink in which to store our processed features (this
         # usually takes the form of a newly created vector layer when the
         # algorithm is run in QGIS).
         self.addParameter(
             QgsProcessingParameterFeatureSink(
-                self.OUTPUT,
-                self.tr('Output layer')
+                self.uwrBuffered,
+                self.tr('Output buffered layer')
             )
         )
 
@@ -101,9 +112,11 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         # Retrieve the feature source and sink. The 'dest_id' variable is used
         # to uniquely identify the feature sink, and must be included in the
         # dictionary returned by the processAlgorithm function.
-        source = self.parameterAsSource(parameters, self.INPUT, context)
-        (sink, dest_id) = self.parameterAsSink(parameters, self.OUTPUT,
+        source = self.parameterAsSource(parameters, self.origUWR, context)
+        (sink, dest_id) = self.parameterAsSink(parameters, self.uwrBuffered,
                 context, source.fields(), source.wkbType(), source.sourceCrs())
+
+
 
         # Compute the number of steps to display within the progress bar and
         # get features from source
@@ -127,7 +140,8 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         # statistics, etc. These should all be included in the returned
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
-        return {self.OUTPUT: dest_id}
+
+        return {self.uwrBuffered: dest_id}
 
     def name(self):
         """
