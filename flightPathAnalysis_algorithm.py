@@ -37,7 +37,9 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFeatureSink,
                        QgsProcessingParameterFile,
-                       QgsMessageLog)
+                       QgsProcessingParameterString,
+                       QgsProcessingParameterField,
+                       QgsProcessingParameterDistance)
 
 
 class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
@@ -62,6 +64,11 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
     DEM = 'DEM'
     gpxFolder = 'gpxFolder'
     uwrBuffered = 'uwrBuffered'
+    unit_id = 'unit_id'
+    unit_id_no = 'unit_id_no'
+    buffDistIS_high = 'buffDistIS_high'
+    buffDistIS_moderate = 'buffDistIS_moderate'
+    buffDistIS_low = 'buffDistIS_low'
     def initAlgorithm(self, config):
         """
         Here we define the inputs and output of the algorithm, along
@@ -90,7 +97,45 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterFile(
                 self.gpxFolder,
                 self.tr('Input gpx folder'),
-                QgsProcessingParameterFile.Folder
+                QgsProcessingParameterFile.Folder,
+                defaultValue='/Users/erica/Desktop/LWRS Script Version/Report#1/mountaingoatflightlinesamplegpxfiles'
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterField(
+                self.unit_id,
+                self.tr('Input unit id field, column has text like u-2-002'),
+                'unit_id', self.origUWR
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterField(
+                self.unit_id_no,
+                self.tr('Input unit id field, column has text like Mg-059'),
+                'unit_id', self.origUWR
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.buffDistIS_high,
+                self.tr('Buffer distance - High Incursion Severity'), 500
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.buffDistIS_moderate,
+                self.tr('Buffer distance - Moderate Incursion Severity'), 1000
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterString(
+                self.buffDistIS_low,
+                self.tr('Buffer distance - Low Incursion Severity'), 1500
             )
         )
 
