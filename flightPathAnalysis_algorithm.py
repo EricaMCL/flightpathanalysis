@@ -40,7 +40,9 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterString,
                        QgsProcessingParameterField,
                        QgsProcessingParameterDistance,
-                       QgsProcessingFeedback)
+                       QgsProcessingFeedback,
+                       QgsProcessingParameterRasterLayer,
+                       QgsProcessingParameterMultipleLayers)
 import processing
 
 
@@ -80,20 +82,20 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         # ===========================================================================
         # OrigUWR - Input vector polygon
         # ===========================================================================
-        self.addParameter(QgsProcessingParameterFeatureSource(
-            self.origUWR, self.tr('Input original UWR'), [QgsProcessing.TypeVectorPolygon]))
+        self.addParameter(QgsProcessingParameterMultipleLayers(
+            self.origUWR, self.tr('Input original UWR'), QgsProcessing.TypeVectorPolygon))
         # ===========================================================================
         # DEM - Input Raster
         # ===========================================================================
-        self.addParameter(QgsProcessingParameterFeatureSource(
-            self.DEM, self.tr('Input project DEM'), [QgsProcessing.TypeRaster]))
+        self.addParameter(QgsProcessingParameterRasterLayer(
+            self.DEM, self.tr('Input project DEM')))
         # ===========================================================================
         # gpx - Input Folder
         # will loop through all the gpx files under the folder
         # ===========================================================================
         self.addParameter(QgsProcessingParameterFile(
             self.gpxFolder, self.tr('Input gpx folder'), QgsProcessingParameterFile.Folder,
-            defaultValue='/Users/erica/Desktop/LWRS Script Version/Report#1/mountaingoatflightlinesamplegpxfiles'))
+           ))
         # ===========================================================================
         # unit_id / unit_id_no - Input string
         # User selects from the field list derived from OrigUWR
