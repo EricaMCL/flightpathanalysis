@@ -43,6 +43,8 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingFeedback,
                        QgsProcessingParameterRasterLayer,
                        QgsProcessingParameterMultipleLayers)
+import glob
+import os
 import processing
 
 
@@ -133,6 +135,7 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         # dictionary returned by the processAlgorithm function.
         source = self.parameterAsSource(parameters, self.origUWR, context)
         origUWR = parameters['origUWR']
+        gpxFolder = parameters['gpxFolder']
         feedback.setProgressText(str(origUWR))
         uwrBuffered = parameters['uwrBuffered']
 
@@ -154,6 +157,15 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
             feedback.setProgressText('Geometry fixed')
             origUWR = fixGeom['OUTPUT']
 
+        # ===========================================================================
+        # Loop through the input GPX folder and get all the gpx files
+        # ===========================================================================
+        gpxFiles = glob.glob(os.path.join(gpxFolder, "*.gpx"))
+        count = 0
+        for gpxFile in gpxFiles:
+            count += 1
+            feedback.setProgressText(str(count))
+            feedback.setProgressText(str(gpxFile))
 
         (sink, dest_id) = self.parameterAsSink(parameters, self.uwrBuffered,
                                                context, source.fields(), source.wkbType(), source.sourceCrs())
