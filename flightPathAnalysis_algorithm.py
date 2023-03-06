@@ -64,7 +64,7 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
     # used when calling the algorithm from another algorithm, or when
     # calling from the QGIS console.
 
-    origUWR = 'OrigUWR'
+    origUWR = 'origUWR'
     DEM = 'DEM'
     gpxFolder = 'gpxFolder'
     uwrBuffered = 'uwrBuffered'
@@ -82,8 +82,8 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         # ===========================================================================
         # OrigUWR - Input vector polygon
         # ===========================================================================
-        self.addParameter(QgsProcessingParameterMultipleLayers(
-            self.origUWR, self.tr('Input original UWR'), QgsProcessing.TypeVectorPolygon))
+        self.addParameter(QgsProcessingParameterFeatureSource(
+            self.origUWR, self.tr('Input original UWR'), [QgsProcessing.TypeVectorPolygon]))
         # ===========================================================================
         # DEM - Input Raster
         # ===========================================================================
@@ -95,7 +95,7 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         # ===========================================================================
         self.addParameter(QgsProcessingParameterFile(
             self.gpxFolder, self.tr('Input gpx folder'), QgsProcessingParameterFile.Folder,
-           ))
+        ))
         # ===========================================================================
         # unit_id / unit_id_no - Input string
         # User selects from the field list derived from OrigUWR
@@ -132,17 +132,28 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         # to uniquely identify the feature sink, and must be included in the
         # dictionary returned by the processAlgorithm function.
         source = self.parameterAsSource(parameters, self.origUWR, context)
+        origUWR = parameters['origUWR']
+        feedback.setProgressText(str(origUWR))
+        uwrBuffered = parameters['uwrBuffered']
 
+        # ===========================================================================
+        # Check if the input vector includes invalid geometry
+        # ===========================================================================
         result = processing.run("qgis:checkvalidity", {
-            'INPUT_LAYER': '/Users/erica/Desktop/LWRS Script Version/Report#2/BCGW_7113060B_1677778350248_10552/WCP_UNGULATE_WINTER_RANGE_SP/WCP_UWR_SP_polygon.shp'})
+            'INPUT_LAYER': parameters['origUWR']})
         errorCount = result['ERROR_COUNT']
-
-        if errorCount > 0:
-            processing.run("native:fixgeometries", {
-                'INPUT': '/Users/erica/Desktop/LWRS Script Version/Report#2/BCGW_7113060B_1677778350248_10552/WCP_UNGULATE_WINTER_RANGE_SP/WCP_UWR_SP_polygon.shp',
-                'OUTPUT': 'TEMPORARY_OUTPUT'})
-
         feedback.setProgressText(str(errorCount))
+
+        # ===========================================================================
+        # Fix the input geometry if invalid found, and replace the input for further process
+        # ===========================================================================
+        if errorCount > 0:
+            fixGeom = processing.run("native:fixgeometries", {
+                'INPUT': parameters['origUWR'],
+                'OUTPUT': 'TEMPORARY_OUTPUT'})
+            feedback.setProgressText('Geometry fixed')
+            origUWR = fixGeom['OUTPUT']
+
 
         (sink, dest_id) = self.parameterAsSink(parameters, self.uwrBuffered,
                                                context, source.fields(), source.wkbType(), source.sourceCrs())
