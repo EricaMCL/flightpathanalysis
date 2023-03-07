@@ -30,7 +30,7 @@ __copyright__ = '(C) 2023 by Erica Liu'
 
 __revision__ = '$Format:%H$'
 
-from qgis.PyQt.QtCore import QCoreApplication
+from qgis.PyQt.QtCore import QCoreApplication, QVariant
 from qgis.core import (QgsProcessing,
                        QgsFeatureSink,
                        QgsProcessingAlgorithm,
@@ -42,7 +42,8 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterDistance,
                        QgsProcessingFeedback,
                        QgsProcessingParameterRasterLayer,
-                       QgsProcessingParameterMultipleLayers)
+                       QgsProcessingParameterMultipleLayers,
+                       QgsField)
 import glob
 import os
 import processing
@@ -67,7 +68,6 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
     # calling from the QGIS console.
 
     origUWR = 'origUWR'
-    DEM = 'DEM'
     gpxFolder = 'gpxFolder'
     uwrBuffered = 'uwrBuffered'
     unit_id = 'unit_id'
@@ -87,17 +87,11 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterFeatureSource(
             self.origUWR, self.tr('Input original UWR'), [QgsProcessing.TypeVectorPolygon]))
         # ===========================================================================
-        # DEM - Input Raster
-        # ===========================================================================
-        self.addParameter(QgsProcessingParameterRasterLayer(
-            self.DEM, self.tr('Input project DEM')))
-        # ===========================================================================
         # gpx - Input Folder
         # will loop through all the gpx files under the folder
         # ===========================================================================
         self.addParameter(QgsProcessingParameterFile(
-            self.gpxFolder, self.tr('Input gpx folder'), QgsProcessingParameterFile.Folder,
-        ))
+            self.gpxFolder, self.tr('Input gpx folder'), QgsProcessingParameterFile.Folder))
         # ===========================================================================
         # unit_id / unit_id_no - Input string
         # User selects from the field list derived from OrigUWR
@@ -129,7 +123,6 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         """
         Here is where the processing itself takes place.
         """
-
         # Retrieve the feature source and sink. The 'dest_id' variable is used
         # to uniquely identify the feature sink, and must be included in the
         # dictionary returned by the processAlgorithm function.
@@ -138,6 +131,19 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         gpxFolder = parameters['gpxFolder']
         feedback.setProgressText(str(origUWR))
         uwrBuffered = parameters['uwrBuffered']
+
+        # ==============================================================
+        # unit_no, eg. u-2-002
+        # unit_no_id, eg. Mg-106
+        # unit_unique_field, field that combines uwr number and uwr unit number
+        # ==============================================================
+        unit_no = parameters['unit_id']
+        unit_no_id = parameters['unit_id_no']
+        uwr_unique_Field = "uwr_unique_id"
+
+        bufferDistList = [int(parameters['buffDistIS_high']), int(parameters['buffDistIS_moderate']),
+                          int(parameters['buffDistIS_low'])]
+        feedback.setProgressText(str(bufferDistList))
 
         # ===========================================================================
         # Check if the input vector includes invalid geometry
@@ -157,6 +163,39 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
             feedback.setProgressText('Geometry fixed')
             origUWR = fixGeom['OUTPUT']
 
+        unit_no_index = None
+        unit_no_id_index = None
+        uwr_unique_Field_index = None
+        origUWR_fieldList = origUWR.fields().names()
+        for field in origUWR_fieldList:
+            if field == unit_no:
+                unit_no_index = origUWR_fieldList.index(field)
+            if field == unit_no_id:
+                unit_no_id_index = origUWR_fieldList.index(field)
+        layer_provider = origUWR.dataProvider()
+        layer_provider.addAttributes([QgsField(uwr_unique_Field, QVariant.String)])
+        origUWR.updateFields()
+        for field in origUWR.fields().names():
+            if field == uwr_unique_Field:
+                #uwr_unique_Field_index = origUWR_fieldList.index(field)
+                feedback.setProgressText(f'{field}')
+                feedback.setProgressText(f'{uwr_unique_Field_index}')
+        feedback.setProgressText(f'{origUWR.fields().names()}')
+
+        origUWR_featureList = origUWR.getFeatures()
+        origUWR.startEditing()
+        for feature in origUWR_featureList:
+            id = feature.id()
+            uwr_unique_Field_value = feature.attributes()[unit_no_index] + '__' + feature.attributes()[unit_no_id_index]
+            feedback.setProgressText(f'{uwr_unique_Field_value}')
+            attr_value = {uwr_unique_Field_index: uwr_unique_Field_value}
+            layer_provider.changeAttributeValues({id: attr_value})
+        origUWR.commitChanges()
+
+        feedback.setProgressText(f'{origUWR.fields().names()}')
+        # for feature in origUWR_feature:
+        #    feedback.setProgressText(f'{feature}')
+
         # ===========================================================================
         # Loop through the input GPX folder and get all the gpx files
         # ===========================================================================
@@ -164,11 +203,10 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         count = 0
         for gpxFile in gpxFiles:
             count += 1
-            feedback.setProgressText(str(count))
-            feedback.setProgressText(str(gpxFile))
+            feedback.setProgressText(f'{str(count)}: {str(gpxFile)}')
 
-        (sink, dest_id) = self.parameterAsSink(parameters, self.uwrBuffered,
-                                               context, source.fields(), source.wkbType(), source.sourceCrs())
+        (sink, dest_id) = self.parameterAsSink(parameters, self.uwrBuffered, context, source.fields(), source.wkbType(),
+                                               source.sourceCrs())
 
         # Compute the number of steps to display within the progress bar and
         # get features from source
