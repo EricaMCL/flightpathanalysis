@@ -43,7 +43,8 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingFeedback,
                        QgsProcessingParameterRasterLayer,
                        QgsProcessingParameterMultipleLayers,
-                       QgsField)
+                       QgsField,
+                       QgsFeature)
 import glob
 import os
 import processing
@@ -126,11 +127,11 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         # Retrieve the feature source and sink. The 'dest_id' variable is used
         # to uniquely identify the feature sink, and must be included in the
         # dictionary returned by the processAlgorithm function.
-        source = self.parameterAsSource(parameters, self.origUWR, context)
+        origUWR_source = self.parameterAsSource(parameters, self.origUWR, context)
+        uwrBuffered_output = self.parameterAsOutputLayer(parameters, self.uwrBuffered, context)
         origUWR = parameters['origUWR']
         gpxFolder = parameters['gpxFolder']
         feedback.setProgressText(str(origUWR))
-        uwrBuffered = parameters['uwrBuffered']
 
         # ==============================================================
         # unit_no, eg. u-2-002
@@ -157,39 +158,25 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         # Fix the input geometry if invalid found, and replace the input for further process
         # ===========================================================================
         if errorCount > 0:
-            fixGeom = processing.run("native:fixgeometries", {
-                'INPUT': parameters['origUWR'],
-                'OUTPUT': 'TEMPORARY_OUTPUT'})
+            fixGeom = processing.run("native:fixgeometries",
+                                     {'INPUT': parameters['origUWR'],
+                                      'OUTPUT': 'TEMPORARY_OUTPUT'})
             feedback.setProgressText('Geometry fixed')
             origUWR = fixGeom['OUTPUT']
 
-        unit_no_index = None
-        unit_no_id_index = None
-        uwr_unique_Field_index = None
-        origUWR_fieldList = origUWR.fields().names()
-        for field in origUWR_fieldList:
-            if field == unit_no:
-                unit_no_index = origUWR_fieldList.index(field)
-            if field == unit_no_id:
-                unit_no_id_index = origUWR_fieldList.index(field)
-        layer_provider = origUWR.dataProvider()
-        layer_provider.addAttributes([QgsField(uwr_unique_Field, QVariant.String)])
-        origUWR.updateFields()
-        feedback.setProgressText(f'{origUWR.fields().names()}')
-
-        origUWR_featureList = origUWR.getFeatures()
-        origUWR.startEditing()
-        for feature in origUWR_featureList:
-            id = feature.id()
-            uwr_unique_Field_value = feature.attributes()[unit_no_index] + '__' + feature.attributes()[unit_no_id_index]
-            feedback.setProgressText(f'{uwr_unique_Field_value}')
-            attr_value = {-1: uwr_unique_Field_value}
-            layer_provider.changeAttributeValues({id: attr_value})
-        origUWR.commitChanges()
-
-        feedback.setProgressText(f'{origUWR.fields().names()}')
-        # for feature in origUWR_feature:
-        #    feedback.setProgressText(f'{feature}')
+        # ===========================================================================
+        # Calculate the uwr_unique_id field value
+        # ===========================================================================
+        final = processing.run("native:fieldcalculator",
+                               {'FIELD_LENGTH' : 100,
+                                'FIELD_NAME' : uwr_unique_Field,
+                                'NEW_FIELD' : True,
+                                'FIELD_PRECISION' : 0,
+                                'FIELD_TYPE' : 2,
+                                'FORMULA' : f' "{unit_no}" + \'__\' + "{unit_no_id}" ',
+                                'INPUT' : origUWR,
+                                'OUTPUT' : uwrBuffered_output }, context = context, feedback = feedback)['OUTPUT']
+        feedback.setProgressText(f'{uwr_unique_Field} added and updated')
 
         # ===========================================================================
         # Loop through the input GPX folder and get all the gpx files
@@ -200,21 +187,13 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
             count += 1
             feedback.setProgressText(f'{str(count)}: {str(gpxFile)}')
 
-        (sink, dest_id) = self.parameterAsSink(parameters, self.uwrBuffered, context, source.fields(), source.wkbType(),
-                                               source.sourceCrs())
-
-        # Compute the number of steps to display within the progress bar and
-        # get features from source
-        total = 100.0 / source.featureCount() if source.featureCount() else 0
-        features = source.getFeatures()
+        total = 100.0 / origUWR_source.featureCount() if origUWR_source.featureCount() else 0
+        features = origUWR_source.getFeatures()
 
         for current, feature in enumerate(features):
             # Stop the algorithm if cancel button has been clicked
             if feedback.isCanceled():
                 break
-
-            # Add a feature in the sink
-            sink.addFeature(feature, QgsFeatureSink.FastInsert)
 
             # Update the progress bar
             feedback.setProgress(int(current * total))
@@ -226,7 +205,7 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
 
-        return {self.uwrBuffered: dest_id}
+        return {self.uwrBuffered: final}
 
     def name(self):
         """
