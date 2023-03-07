@@ -175,11 +175,6 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
         layer_provider = origUWR.dataProvider()
         layer_provider.addAttributes([QgsField(uwr_unique_Field, QVariant.String)])
         origUWR.updateFields()
-        for field in origUWR.fields().names():
-            if field == uwr_unique_Field:
-                #uwr_unique_Field_index = origUWR_fieldList.index(field)
-                feedback.setProgressText(f'{field}')
-                feedback.setProgressText(f'{uwr_unique_Field_index}')
         feedback.setProgressText(f'{origUWR.fields().names()}')
 
         origUWR_featureList = origUWR.getFeatures()
@@ -188,7 +183,7 @@ class flightPathAnalysisAlgorithm(QgsProcessingAlgorithm):
             id = feature.id()
             uwr_unique_Field_value = feature.attributes()[unit_no_index] + '__' + feature.attributes()[unit_no_id_index]
             feedback.setProgressText(f'{uwr_unique_Field_value}')
-            attr_value = {uwr_unique_Field_index: uwr_unique_Field_value}
+            attr_value = {-1: uwr_unique_Field_value}
             layer_provider.changeAttributeValues({id: attr_value})
         origUWR.commitChanges()
 
