@@ -31,7 +31,7 @@ __copyright__ = '(C) 2023 by Erica Liu'
 __revision__ = '$Format:%H$'
 
 from qgis.core import QgsProcessingProvider
-from .flightPathAnalysis_algorithm import flightPathAnalysisAlgorithm
+from .flightPathAnalysis_algorithm import createUWRBuffer, flightPathConvert
 
 
 class flightPathAnalysisProvider(QgsProcessingProvider):
@@ -53,7 +53,8 @@ class flightPathAnalysisProvider(QgsProcessingProvider):
         """
         Loads all algorithms belonging to this provider.
         """
-        self.addAlgorithm(flightPathAnalysisAlgorithm())
+        self.addAlgorithm(createUWRBuffer())
+        self.addAlgorithm(flightPathConvert())
         # add additional algorithms here
         # self.addAlgorithm(MyOtherAlgorithm())
 
