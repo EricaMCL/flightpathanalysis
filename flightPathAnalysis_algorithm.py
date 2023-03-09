@@ -49,6 +49,7 @@ from qgis.core import (QgsProcessing,
 import glob
 import os
 import processing
+import flightPathAnalysis_Function_QGIS as fpa
 
 
 class createUWRBuffer(QgsProcessingAlgorithm):
@@ -178,14 +179,17 @@ class createUWRBuffer(QgsProcessingAlgorithm):
         for feature in origUWR.getFeatures():
             uwr_unique_Field_value = f'{feature.attributes()[unit_no_index]}__{feature.attributes()[unit_no_id_index]}'
             uwrSet.add(uwr_unique_Field_value)
-        feedback.setProgressText(f'{uwrSet}')
+        feedback.setProgressText(f'{uwr_unique_Field} added and updated')
 
         # ==============================================================
         # Check existence of uwrBuffered in project folder
         # ==============================================================
-        uwrBuffered_check = os.path.isfile(uwrBufferedPath + '.gpkg')
+        uwrBuffered_exist = os.path.isfile(uwrBufferedPath + '.gpkg')
 
-        if uwrBuffered_check:
+        # ==============================================================
+        # Get list of uwr that have buffers created
+        # ==============================================================
+        if uwrBuffered_exist:
             feedback.setProgressText(f'uwrBuffered exists in project folder.')
             createdUWRSet = set()
             uwrBuffered_layer = QgsVectorLayer((uwrBufferedPath + '.gpkg'), "uwrBuffered", "ogr")
@@ -196,18 +200,86 @@ class createUWRBuffer(QgsProcessingAlgorithm):
             for feature in uwrBuffered_layer.getFeatures():
                 uwr_unique_Field_value =  f'{feature.attributes()[uwr_unique_Field_index]}'
                 createdUWRSet.add(uwr_unique_Field_value)
-            requiredUWR = uwrSet - createdUWRSet
-            if len(requiredUWR) > 1:
-                feedback.setProgressText(f'Need to create the following uwr buffers {requiredUWR}')
-            else:
-                feedback.setProgressText(f'No Need to create uwr buffers')
+            uwrRequireSet = uwrSet - createdUWRSet
 
         else:
+            uwrRequireSet = uwrSet
             feedback.setProgressText(f'uwrBuffered NOT exists in project folder.')
 
-        # ==============================================================
-        # Get list of uwr that have buffers created
-        # ==============================================================
+
+        if len(uwrRequireSet) > 0:
+            if uwrBuffered_exist:
+            # ==============================================================
+            # Make new field in copy of orig UWR FC for unique UWR id.
+            # DIFFERENT FROM unique uwr id. make it so that there's no way this field existed before
+            # ==============================================================
+                tempUniqueUWRField = 'tempUniqueUWRField'
+                if tempUniqueUWRField not in origUWRFieldList:
+                    tempGPKG = processing.run("native:fieldcalculator",
+                                              {'FIELD_LENGTH': 100,
+                                               'FIELD_NAME': tempUniqueUWRField,
+                                               'NEW_FIELD': True,
+                                               'FIELD_PRECISION': 0,
+                                               'FIELD_TYPE': 2,
+                                               'FORMULA': f' "{unit_no}" + \'__\' + "{unit_no_id}" ',
+                                               'INPUT': origUWR,
+                                               'OUTPUT': 'TEMPORARY_OUTPUT'}, context=context, feedback=feedback)['OUTPUT']
+
+
+                # ==============================================================
+                # Select require uwr by making query with uwrRequireSet
+                # ==============================================================
+                uwrList_String = "','".join(uwrRequireSet)
+                unbufferedFL = os.path.join(projectFolder, 'unbufferedUWR')
+                expression = tempUniqueUWRField + " in ('" + uwrList_String + "')"
+                processing.run("native:extractbyexpression",
+                               {'EXPRESSION': expression,
+                                'INPUT': tempGPKG,
+                                'OUTPUT': unbufferedFL})
+                feedback.setProgressText(f'unBufferedUWR created in {unbufferedFL}')
+                requireUWRLayer = unbufferedFL
+            else:
+                requireUWRLayer = origUWR
+                feedback.setProgressText('requireUWRLayer = origUWR')
+
+            # ==============================================================
+            # Dissolves input feature class by dissolveFields list if list is given
+            # This is to avoid errors for multi-part uwr that have been split into
+            # separate features in the original uwr feature class.
+            # ==============================================================
+            dissolvedOrigPath = os.path.join(projectFolder, 'dissolve')
+            dissolvedOrig = processing.run("native:dissolve",
+                                           {'FIELD': ['UWR_TAG', 'UNIT_NO'],
+                                            'INPUT': requireUWRLayer,
+                                            'OUTPUT': 'TEMPORARY_OUTPUT',
+                                            'SEPARATE_DISJOINT': False})['OUTPUT']
+            dissolvedOrig_fid_removed = processing.run("native:deletecolumn",
+                                           {'COLUMN': ['fid'],
+                                            'INPUT': dissolvedOrig,
+                                            'OUTPUT': dissolvedOrigPath})
+
+            # ============re==================================================
+            # Start list of intermediate features to be deleted
+            # ==============================================================
+            uwrOnly = "BufferUWROnly"
+            delFC = [os.path.join(projectFolder, uwrOnly)]
+
+            # ==============================================================
+            # Create raw buffers
+            # ==============================================================
+            rawBufferDict = {}
+            for bufferDist in bufferDistList:
+                rawBufferGPKG = fpa.rawBuffer(projectFolder, 'dissolve',
+                                              str(bufferDist, projectFolder,
+                                                  unit_no, unit_no_id, uwr_unique_Field)
+                rawBufferDict[bufferDist] = [rawBufferLoc, rawBufferName]
+                delFC.append(os.path.join(rawBufferLoc, rawBufferName))
+                arcpy.AddMessage(f"raw buffer created, {rawBufferName}")
+
+
+
+        else:
+            feedback.setProgressText(f'No Need to create uwr buffers')
 
 
         # ===========================================================================
