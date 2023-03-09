@@ -44,7 +44,8 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterRasterLayer,
                        QgsProcessingParameterMultipleLayers,
                        QgsField,
-                       QgsFeature)
+                       QgsFeature,
+                       QgsVectorLayer)
 import glob
 import os
 import processing
@@ -132,7 +133,7 @@ class createUWRBuffer(QgsProcessingAlgorithm):
         origUWR = parameters['origUWR']
         projectFolder = parameters['projectFolder']
         feedback.setProgressText(str(origUWR))
-        uwrBufferedPath = os.path.join(projectFolder, 'uwrBufferd')
+        uwrBufferedPath = os.path.join(projectFolder, 'uwrBuffered')
 
 
         # ==============================================================
@@ -166,6 +167,49 @@ class createUWRBuffer(QgsProcessingAlgorithm):
             feedback.setProgressText('Geometry fixed')
             origUWR = fixGeom['OUTPUT']
 
+        # ==============================================================
+        # Get list of relevant UWR
+        # ==============================================================
+        origUWRFieldList = origUWR.fields().names()
+        unit_no_index = origUWRFieldList.index(unit_no)
+        unit_no_id_index = origUWRFieldList.index(unit_no_id)
+        feedback.setProgressText(f'{unit_no_id_index, unit_no_index}')
+        uwrSet = set()
+        for feature in origUWR.getFeatures():
+            uwr_unique_Field_value = f'{feature.attributes()[unit_no_index]}__{feature.attributes()[unit_no_id_index]}'
+            uwrSet.add(uwr_unique_Field_value)
+        feedback.setProgressText(f'{uwrSet}')
+
+        # ==============================================================
+        # Check existence of uwrBuffered in project folder
+        # ==============================================================
+        uwrBuffered_check = os.path.isfile(uwrBufferedPath + '.gpkg')
+
+        if uwrBuffered_check:
+            feedback.setProgressText(f'uwrBuffered exists in project folder.')
+            createdUWRSet = set()
+            uwrBuffered_layer = QgsVectorLayer((uwrBufferedPath + '.gpkg'), "uwrBuffered", "ogr")
+            uwrBufferedFieldList = uwrBuffered_layer.fields().names()
+            feedback.setProgressText(f'{uwrBufferedFieldList}')
+            uwr_unique_Field_index = uwrBufferedFieldList.index(uwr_unique_Field)
+            feedback.setProgressText(f'{uwrBufferedFieldList}')
+            for feature in uwrBuffered_layer.getFeatures():
+                uwr_unique_Field_value =  f'{feature.attributes()[uwr_unique_Field_index]}'
+                createdUWRSet.add(uwr_unique_Field_value)
+            requiredUWR = uwrSet - createdUWRSet
+            if len(requiredUWR) > 1:
+                feedback.setProgressText(f'Need to create the following uwr buffers {requiredUWR}')
+            else:
+                feedback.setProgressText(f'No Need to create uwr buffers')
+
+        else:
+            feedback.setProgressText(f'uwrBuffered NOT exists in project folder.')
+
+        # ==============================================================
+        # Get list of uwr that have buffers created
+        # ==============================================================
+
+
         # ===========================================================================
         # Calculate the uwr_unique_id field value
         # ===========================================================================
@@ -177,8 +221,9 @@ class createUWRBuffer(QgsProcessingAlgorithm):
                                 'FIELD_TYPE' : 2,
                                 'FORMULA' : f' "{unit_no}" + \'__\' + "{unit_no_id}" ',
                                 'INPUT' : origUWR,
-                                'OUTPUT' : uwrBufferedPath}, context = context, feedback = feedback)['OUTPUT']
+                                'OUTPUT' : uwrBuffered_output}, context = context, feedback = feedback)['OUTPUT']
         feedback.setProgressText(f'{uwr_unique_Field} added and updated')
+
 
 
         total = 100.0 / origUWR_source.featureCount() if origUWR_source.featureCount() else 0
