@@ -49,6 +49,7 @@ from qgis.core import (QgsProcessing,
 import glob
 import os
 import processing
+from .flightPathAnalysis_Function_QGIS import rawBuffer
 
 
 
@@ -135,72 +136,6 @@ class createUWRBuffer(QgsProcessingAlgorithm):
         projectFolder = parameters['projectFolder']
         feedback.setProgressText(str(origUWR))
         uwrBufferedPath = os.path.join(projectFolder, 'uwrBuffered')
-
-        def replaceNonAlphaNum(myText, newXter):
-            '''
-            Purpose:  to check for non-alpha numeric xters
-            replace them with user defined new character
-            '''
-            # go thru each xter. Check to see if it's alphanumeric.
-            # If not, then replace it with the new character (newXter)
-            for x in range(0, len(myText)):
-                if not myText[x].isalnum():
-                    myText = myText.replace(myText[x], newXter)
-            return myText
-
-        def rawBuffer(origFCLoc, origFCName, bufferDistanceInput, bufferNumber, projectFolder, unit_no, unit_no_id,
-                      uwr_unique_Field):
-            """
-            (string, string, string, int, string) -> string, string
-            origFCLoc: Folder of feature class to be buffered
-            origFCName: name of feature class or shapefile to be buffered
-            bufferDistanceInput: buffer value and unit. example: "1500 Meters"
-            bufferNumber: buffer value. Use for naming output feature class. Assume units in meters. example: 1500
-            unit_no_Field: field of unit number
-            unit_no_id_Field: field of unit number id
-            uwr_unique_Field: field for unique uwr id made from combining unit number and unit number id
-
-            Purpose:
-            Buffers given input feature class or dissolved feature class.
-            Returns names of output GDB and buffer fc name.
-
-            Output: buffered feature class
-
-            """
-            if origFCName.find(".shp") >= 0:
-                origName = replaceNonAlphaNum(origFCName[:origFCName.find(".gpkg")],
-                                              "_")  ###deleted +1 in  origFCName.find(".shp")+1
-            else:
-                origName = replaceNonAlphaNum(origFCName, "_")
-
-            rawBuffer = "rawBuffer_" + origName + "_" + str(bufferNumber)
-
-            tempBufferLyr = processing.run("native:buffer",
-                                           {'INPUT': os.path.join(origFCLoc, origFCName),
-                                            'DISTANCE': bufferDist, 'SEGMENTS': 90, 'END_CAP_STYLE': 0, 'JOIN_STYLE': 0,
-                                            'MITER_LIMIT': 2,
-                                            'DISSOLVE': False, 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
-            feedback.setProgressText(f'buffered {origName} by {bufferDistanceInput}')
-
-            tempBufferLyr_fid_removed = processing.run("native:deletecolumn",
-                                                       {'COLUMN': ['fid'],
-                                                        'INPUT': tempBufferLyr,
-                                                        'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
-            # ===========================================================================
-            # Calculate the uwr_unique_id field value
-            # ===========================================================================
-            bufferLyr = processing.run("native:fieldcalculator",
-                                       {'FIELD_LENGTH': 100,
-                                        'FIELD_NAME': uwr_unique_Field,
-                                        'NEW_FIELD': True,
-                                        'FIELD_PRECISION': 0,
-                                        'FIELD_TYPE': 2,
-                                        'FORMULA': f' "{unit_no}" + \'__\' + "{unit_no_id}" ',
-                                        'INPUT': tempBufferLyr_fid_removed,
-                                        'OUTPUT': os.path.join(projectFolder, rawBuffer)}, context=context,
-                                       feedback=feedback)['OUTPUT']
-
-            return projectFolder, rawBuffer
 
         # ==============================================================
         # unit_no, eg. u-2-002
@@ -333,10 +268,6 @@ class createUWRBuffer(QgsProcessingAlgorithm):
             # Create raw buffers
             # ==============================================================
             rawBufferDict = {}
-            # ==============================================================
-            # Create raw buffers
-            # ==============================================================
-            rawBufferDict = {}
             for bufferDist in bufferDistList:
                 rawBufferLoc, rawBufferName = rawBuffer(projectFolder, 'dissolve.gpkg',
                                               str(bufferDist) + 'Meters', bufferDist, projectFolder,
@@ -385,7 +316,6 @@ class createUWRBuffer(QgsProcessingAlgorithm):
 
         return {self.uwrBuffered: final}
 
-
     def name(self):
         """
         Returns the algorithm name, used for identifying the algorithm. This
@@ -425,6 +355,7 @@ class createUWRBuffer(QgsProcessingAlgorithm):
 
     def createInstance(self):
         return createUWRBuffer()
+
 
 class flightPathConvert(QgsProcessingAlgorithm):
     """
@@ -622,5 +553,3 @@ class flightPathConvert(QgsProcessingAlgorithm):
 
     def createInstance(self):
         return flightPathConvert()
-
-

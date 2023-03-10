@@ -1,12 +1,22 @@
-import arcpy
-import datetime
-import time
+from qgis.PyQt.QtCore import QCoreApplication, QVariant
+from qgis.core import (QgsProcessing,
+                       QgsFeatureSink,
+                       QgsProcessingAlgorithm,
+                       QgsProcessingParameterFeatureSource,
+                       QgsProcessingParameterFeatureSink,
+                       QgsProcessingParameterFile,
+                       QgsProcessingParameterString,
+                       QgsProcessingParameterField,
+                       QgsProcessingParameterDistance,
+                       QgsProcessingFeedback,
+                       QgsProcessingParameterRasterLayer,
+                       QgsProcessingParameterMultipleLayers,
+                       QgsField,
+                       QgsFeature,
+                       QgsVectorLayer)
+import glob
 import os
-from math import sqrt
-import tempfile
-import pandas as pd
-import subprocess
-
+import processing
 
 
 def replaceNonAlphaNum(myText, newXter):
@@ -83,9 +93,7 @@ def appendMergeFeatures(featuresList, finalPath):
         print('appended all features to the final layer', finalPath)
 
 
-## functions to create uwr buffer
-
-def rawBuffer(origFCLoc, origFCName, bufferDistanceInput, bufferNumber, outputGDB, unit_no_Field, unit_no_id_Field,
+def rawBuffer(origFCLoc, origFCName, bufferDistanceInput, bufferDist, projectFolder, unit_no, unit_no_id,
               uwr_unique_Field):
     """
     (string, string, string, int, string) -> string, string
@@ -105,27 +113,38 @@ def rawBuffer(origFCLoc, origFCName, bufferDistanceInput, bufferNumber, outputGD
 
     """
     if origFCName.find(".shp") >= 0:
-        origName = replaceNonAlphaNum(origFCName[:origFCName.find(".shp")],
-                                      "_")  ###deleted +1 in  origFCName.find(".shp")+1
+        origName = replaceNonAlphaNum(origFCName[:origFCName.find(".gpkg")],
+                                      "_")  ###deleted +1 in  origFCName.find(".gpkg")+1
     else:
         origName = replaceNonAlphaNum(origFCName, "_")
 
-    rawBuffer = "rawBuffer_" + origName + "_" + str(bufferNumber)
+    rawBuffer = "rawBuffer_" + origName + "_" + str(bufferDist)
 
-    arcpy.Buffer_analysis(os.path.join(origFCLoc, origFCName), os.path.join(outputGDB, rawBuffer), bufferDistanceInput)
-    print("buffered", origName, "by", bufferDistanceInput)
-    arcpy.DeleteField_management(os.path.join(outputGDB, rawBuffer), ["ORIG_FID"])
+    tempBufferLyr = processing.run("native:buffer",
+                                   {'INPUT': os.path.join(origFCLoc, origFCName),
+                                    'DISTANCE': bufferDist, 'SEGMENTS': 90, 'END_CAP_STYLE': 0, 'JOIN_STYLE': 0,
+                                    'MITER_LIMIT': 2,
+                                    'DISSOLVE': False, 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
-    # Add field that combines unit_no and unit_no_id
-    arcpy.AddField_management(os.path.join(outputGDB, rawBuffer), uwr_unique_Field, "TEXT")
-    with arcpy.da.UpdateCursor(os.path.join(outputGDB, rawBuffer),
-                               [uwr_unique_Field, unit_no_Field, unit_no_id_Field]) as cursor:
-        for row in cursor:
-            row[0] = str(row[1]) + "__" + str(row[2])
-            cursor.updateRow(row)
-    del cursor
 
-    return outputGDB, rawBuffer
+    tempBufferLyr_fid_removed = processing.run("native:deletecolumn",
+                                               {'COLUMN': ['fid'],
+                                                'INPUT': tempBufferLyr,
+                                                'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+    # ===========================================================================
+    # Calculate the uwr_unique_id field value
+    # ===========================================================================
+    bufferLyr = processing.run("native:fieldcalculator",
+                               {'FIELD_LENGTH': 100,
+                                'FIELD_NAME': uwr_unique_Field,
+                                'NEW_FIELD': True,
+                                'FIELD_PRECISION': 0,
+                                'FIELD_TYPE': 2,
+                                'FORMULA': f' "{unit_no}" + \'__\' + "{unit_no_id}" ',
+                                'INPUT': tempBufferLyr_fid_removed,
+                                'OUTPUT': os.path.join(projectFolder, rawBuffer)})
+
+    return projectFolder, rawBuffer
 
 
 def findBufferRange(ToEraseLoc, ToEraseName, UsetoErasePath, uniqueUWR_IDFields, outputGDB):
