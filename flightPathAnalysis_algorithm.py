@@ -280,7 +280,7 @@ class createUWRBuffer(QgsProcessingAlgorithm):
             # Get donut shaped buffer to only get list of buffered donut polygons
             # that will be merge together to the final layer
             # ==============================================================
-            requireMergeBufferList = [os.path.join(projectFolder, uwrOnly + f'|layername={uwrOnly}')]
+            requireMergeBufferList = []
 
             # ==============================================================
             # Go through each buffer distance to get the donut shapes of
@@ -315,7 +315,7 @@ class createUWRBuffer(QgsProcessingAlgorithm):
             # ==============================================================
             # Create bufferUWROnly_NEW with uwr_unique_field and BUFF_DIST fields
             # ==============================================================
-            uwrOnlyNewPath = os.path.join(projectFolder, uwrOnly + '_NEW')
+            uwrOnlyNewPath = os.path.join(projectFolder, uwrOnly)
             uwrOnly_new = processing.run("native:savefeatures",
                                            {'INPUT': dissolvedOrig_fid_removed,
                                             'OUTPUT': 'TEMPORARY_OUTPUT',
@@ -342,6 +342,7 @@ class createUWRBuffer(QgsProcessingAlgorithm):
                                     'FORMULA': 0,
                                     'INPUT': uwrOnly_new_uniField,
                                     'OUTPUT': uwrOnlyNewPath}, context=context, feedback=feedback)['OUTPUT']
+            requireMergeBufferList.append(uwrOnly_new_uniField_buffDist)
 
             feedback.setProgressText(f'{uwrOnly_new_uniField_buffDist} created')
 
@@ -351,8 +352,9 @@ class createUWRBuffer(QgsProcessingAlgorithm):
             if uwrBuffered_exist:
                 feedback.setProgressText('final geopackage exists')
             else:
-                final = processing.run("native:mergevectorlayers", {'LAYERS': requireMergeBufferList,
-                                                            'OUTPUT': uwrBuffered_output})['OUTPUT']
+                final = processing.run("native:mergevectorlayers",
+                                       {'LAYERS': requireMergeBufferList,
+                                        'OUTPUT': uwrBufferedPath})['OUTPUT']
                 for f in requireMergeBufferList:
                     feedback.setProgressText(f'{f} merged')
 

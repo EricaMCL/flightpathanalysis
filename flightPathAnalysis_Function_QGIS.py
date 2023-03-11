@@ -163,10 +163,10 @@ def findBufferRange(UseToErasePath, ToErasePath, uniqueIDFields, projectFolder, 
     outputPath = os.path.join(projectFolder, 'rawBuffer_' + str(bufferDist) + 'only')
     output = processing.run("native:mergevectorlayers", {'LAYERS': bufferedFeatures,
                                                 'OUTPUT': outputPath})['OUTPUT']
-    outputLyr = output + '|layername=' + 'rawBuffer_' + str(bufferDist) + 'only'
+    #outputLyr = output + '|layername=' + 'rawBuffer_' + str(bufferDist) + 'only'
 
 
-    return outputLyr
+    return output
 
 ##functions for terrain masking
 ##just use this function to create viewshed
