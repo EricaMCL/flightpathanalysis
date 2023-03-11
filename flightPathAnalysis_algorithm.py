@@ -49,7 +49,7 @@ from qgis.core import (QgsProcessing,
 import glob
 import os
 import processing
-from .flightPathAnalysis_Function_QGIS import rawBuffer
+from .flightPathAnalysis_Function_QGIS import rawBuffer, findBufferRange
 
 
 
@@ -280,14 +280,13 @@ class createUWRBuffer(QgsProcessingAlgorithm):
             # Get donut shaped buffer to only get list of buffered donut polygons
             # that will be merge together to the final layer
             # ==============================================================
-            requireMergeBufferList = [os.path.join(projectFolder, uwrOnly)]
+            requireMergeBufferList = [os.path.join(projectFolder, uwrOnly + f'|layername={uwrOnly}')]
 
             # ==============================================================
             # Go through each buffer distance to get the donut shapes of
             # only the area for each buffer distance
             # ==============================================================
             uniqueIDFields = [unit_no, unit_no_id]
-            UseToErasePath = dissolvedOrig_fid_removed
             sortBufferDistList = list(sorted(bufferDistList))
             feedback.setProgressText(f'{sortBufferDistList} -- sortedBuffer')
             for bufferDist in sortBufferDistList:
@@ -298,70 +297,69 @@ class createUWRBuffer(QgsProcessingAlgorithm):
                 feedback.setProgressText(f'{bufferDist} -- Bufferdist')
 
                 if sortBufferDistList.index(bufferDist) == 0:
-                    useToEraseLyr = processing.run("native:savefeatures",
-                                           {'INPUT': UseToErasePath,
+                    onlyBufferDist = findBufferRange(dissolvedOrig_fid_removed, ToErasePath, uniqueIDFields, projectFolder, bufferDist)
+                    feedback.setProgressText(f'UseToErasePath - {dissolvedOrig_fid_removed}')
+                    feedback.setProgressText(f'ToErasePath - {ToErasePath}')
+                else:
+                    prevIndex = sortBufferDistList.index(bufferDist) - 1
+                    prevBufferDist = sortBufferDistList[prevIndex]
+                    prevBufferPath = os.path.join(rawBufferDict[prevBufferDist][0], rawBufferDict[prevBufferDist][1] + '.gpkg')
+                    feedback.setProgressText(prevBufferPath)
+                    feedback.setProgressText(f'UseToErasePath - {prevBufferPath}')
+                    feedback.setProgressText(f'ToErasePath - {ToErasePath}')
+                    onlyBufferDist = findBufferRange(prevBufferPath, ToErasePath, uniqueIDFields, projectFolder, bufferDist)
+
+                requireMergeBufferList.append(onlyBufferDist)
+                feedback.setProgressText(f'appended uwronly{onlyBufferDist} -- onlyBufferDist')
+
+            # ==============================================================
+            # Create bufferUWROnly_NEW with uwr_unique_field and BUFF_DIST fields
+            # ==============================================================
+            uwrOnlyNewPath = os.path.join(projectFolder, uwrOnly + '_NEW')
+            uwrOnly_new = processing.run("native:savefeatures",
+                                           {'INPUT': dissolvedOrig_fid_removed,
                                             'OUTPUT': 'TEMPORARY_OUTPUT',
                                             'LAYER_NAME': '',
                                             'DATASOURCE_OPTIONS': '',
-                                            'LAYER_OPTIONS': ''}, context=context, feedback=feedback)['OUTPUT']
-                    useToEraseLyr_saved = QgsVectorLayer((useToEraseLyr), "", "ogr")
+                                            'LAYER_OPTIONS': ''})['OUTPUT']
 
-                    ToEraseLyr = processing.run("native:savefeatures",
-                                        {'INPUT': ToErasePath,
-                                         'OUTPUT': 'TEMPORARY_OUTPUT',
-                                         'LAYER_NAME': '', 'DATASOURCE_OPTIONS': '',
-                                         'LAYER_OPTIONS': ''}, context=context, feedback=feedback)['OUTPUT']
-                    ToEraseLyr_saved = QgsVectorLayer((ToEraseLyr), "", "ogr")
+            uwrOnly_new_uniField = processing.run("native:fieldcalculator",
+                                   {'FIELD_LENGTH': 100,
+                                    'FIELD_NAME': uwr_unique_Field,
+                                    'NEW_FIELD': True,
+                                    'FIELD_PRECISION': 0,
+                                    'FIELD_TYPE': 2,
+                                    'FORMULA': f' "{unit_no}" + \'__\' + "{unit_no_id}" ',
+                                    'INPUT': uwrOnly_new,
+                                    'OUTPUT': 'TEMPORARY_OUTPUT'}, context=context, feedback=feedback)['OUTPUT']
 
-                    # count of features
-                    out_count = 0
+            uwrOnly_new_uniField_buffDist = processing.run("native:fieldcalculator",
+                                   {'FIELD_LENGTH': 100,
+                                    'FIELD_NAME': 'BUFF_DIST',
+                                    'NEW_FIELD': True,
+                                    'FIELD_PRECISION': 0,
+                                    'FIELD_TYPE': 0,
+                                    'FORMULA': 0,
+                                    'INPUT': uwrOnly_new_uniField,
+                                    'OUTPUT': uwrOnlyNewPath}, context=context, feedback=feedback)['OUTPUT']
 
-                    # list of erased fc to merge together
-                    bufferedFeatures = []
+            feedback.setProgressText(f'{uwrOnly_new_uniField_buffDist} created')
 
-                    # select unique id in each fc and erase area of second fc from first fc. Creates a fc output
-                    for feature in useToEraseLyr_saved.getFeatures():
-                        useToEraseLyr_fields = useToEraseLyr_saved.fields().names()
-                        uniqueIDFields_Index = [useToEraseLyr_fields.index(unit_no), useToEraseLyr_fields.index(unit_no_id)]
-                        unit_no_attribute = feature.attributes()[uniqueIDFields_Index[0]]
-                        if type(unit_no_attribute) == int:
-                            expression = '(\"' + uniqueIDFields[0] + '\" = ' + str(feature.attributes()[uniqueIDFields_Index[0]]) + ')'
-                        else:
-                            expression = '(\"' + uniqueIDFields[0] + '\" = \'' + str(feature.attributes()[uniqueIDFields_Index[0]]) + "')"
-                        countField = len(uniqueIDFields)
-                        if countField > 1:
-                            for i in range(1, countField):
-                                if type(feature.attributes()[uniqueIDFields_Index[i]]) == int:
-                                    expression += 'AND (\"' + uniqueIDFields[i] + '\" = ' + str(feature.attributes()[uniqueIDFields_Index[i]]) + ')'
-                                else:
-                                    expression += 'AND (\"' + uniqueIDFields[i] + '\" = \'' + str(feature.attributes()[uniqueIDFields_Index[i]]) + "')"
-
-                        out_count += 1
-
-                        useToEraseLyr_selected = processing.run("native:extractbyexpression",
-                                   {'EXPRESSION': expression,
-                                    'INPUT': useToEraseLyr,
-                                    'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
-
-                        ToEraseLyr_selected = processing.run("native:extractbyexpression",
-                                   {'EXPRESSION': expression,
-                                    'INPUT': ToEraseLyr,
-                                    'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
-
-                        out_features = projectFolder + "\\outfeature" + str(out_count)
-                        processing.run("native:difference", {'INPUT': ToEraseLyr_selected,
-                                                             'OVERLAY': useToEraseLyr_selected,
-                                                             'OUTPUT': out_features, 'GRID_SIZE': None})
-
-                        bufferedFeatures.append(out_features + '.gpkg|layername=' + "outfeature" + str(out_count))
-                        if (out_count % 250) == 0:
-                            feedback.setProgressText(f'{out_count} features done')
+            # ==============================================================
+            # Append uwr into the final geopackage or create a new one
+            # ==============================================================
+            if uwrBuffered_exist:
+                feedback.setProgressText('final geopackage exists')
+            else:
+                final = processing.run("native:mergevectorlayers", {'LAYERS': requireMergeBufferList,
+                                                            'OUTPUT': uwrBuffered_output})['OUTPUT']
+                for f in requireMergeBufferList:
+                    feedback.setProgressText(f'{f} merged')
 
 
-                    # merge all outputs
-                    outputPath = ToEraseLoc + "\\" + ToEraseName + "Only"
-                    processing.run("native:mergevectorlayers", {'LAYERS': bufferedFeatures,
-                                                                'OUTPUT': outputPath})
+
+
+
 
 
 
@@ -378,18 +376,6 @@ class createUWRBuffer(QgsProcessingAlgorithm):
         # ===========================================================================
         # Calculate the uwr_unique_id field value
         # ===========================================================================
-        final = processing.run("native:fieldcalculator",
-                               {'FIELD_LENGTH' : 100,
-                                'FIELD_NAME' : uwr_unique_Field,
-                                'NEW_FIELD' : True,
-                                'FIELD_PRECISION' : 0,
-                                'FIELD_TYPE' : 2,
-                                'FORMULA' : f' "{unit_no}" + \'__\' + "{unit_no_id}" ',
-                                'INPUT' : origUWR,
-                                'OUTPUT' : uwrBuffered_output}, context = context, feedback = feedback)['OUTPUT']
-        feedback.setProgressText(f'{uwr_unique_Field} added and updated')
-
-
 
         total = 100.0 / origUWR_source.featureCount() if origUWR_source.featureCount() else 0
         features = origUWR_source.getFeatures()
