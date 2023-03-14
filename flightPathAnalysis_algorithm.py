@@ -456,14 +456,11 @@ class flightPathConvert(QgsProcessingAlgorithm):
     # used when calling the algorithm from another algorithm, or when
     # calling from the QGIS console.
 
-    origUWR = 'origUWR'
     gpxFolder = 'gpxFolder'
     uwrBuffered = 'uwrBuffered'
     unit_id = 'unit_id'
     unit_id_no = 'unit_id_no'
-    buffDistIS_high = 'buffDistIS_high'
-    buffDistIS_moderate = 'buffDistIS_moderate'
-    buffDistIS_low = 'buffDistIS_low'
+    DEM = 'DEM'
 
     def initAlgorithm(self, config):
         """
@@ -471,42 +468,31 @@ class flightPathConvert(QgsProcessingAlgorithm):
         with some other properties.
         """
         # ===========================================================================
-        # OrigUWR - Input vector polygon
+        # uwrBuffered - output buffered layer
         # ===========================================================================
         self.addParameter(QgsProcessingParameterFeatureSource(
-            self.origUWR, self.tr('Input original UWR'), [QgsProcessing.TypeVectorPolygon]))
+            self.uwrBuffered, self.tr('Input buffered layer'), [QgsProcessing.TypeVectorPolygon]))
+
+        # ===========================================================================
+        # unit_id / unit_id_no - Input string
+        # User selects from the field list derived from OrigUWR
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterField(
+            self.unit_id, self.tr('Input unit id field, column has text like u-2-002'), 'unit_id', self.uwrBuffered))
+
+        self.addParameter(QgsProcessingParameterField(
+            self.unit_id_no, self.tr('Input unit id field, column has text like Mg-059'), 'unit_id', self.uwrBuffered))
+
         # ===========================================================================
         # gpx - Input Folder
         # will loop through all the gpx files under the folder
         # ===========================================================================
         self.addParameter(QgsProcessingParameterFile(
             self.gpxFolder, self.tr('Input gpx folder'), QgsProcessingParameterFile.Folder))
-        # ===========================================================================
-        # unit_id / unit_id_no - Input string
-        # User selects from the field list derived from OrigUWR
-        # ===========================================================================
-        self.addParameter(QgsProcessingParameterField(
-            self.unit_id, self.tr('Input unit id field, column has text like u-2-002'), 'unit_id', self.origUWR))
 
-        self.addParameter(QgsProcessingParameterField(
-            self.unit_id_no, self.tr('Input unit id field, column has text like Mg-059'), 'unit_id', self.origUWR))
-        # ===========================================================================
-        # bufferDistIS_high/moderate/low - Input string, with default value 500/1000/1500
-        # three buffer range represents different incursion severity range
-        # ===========================================================================
-        self.addParameter(QgsProcessingParameterString(
-            self.buffDistIS_high, self.tr('Buffer distance - High Incursion Severity'), 500))
+        self.addParameter(QgsProcessingParameterRasterLayer(
+            self.DEM, self.tr('Input project DEM'), QgsProcessing.TypeRaster))
 
-        self.addParameter(QgsProcessingParameterString(
-            self.buffDistIS_moderate, self.tr('Buffer distance - Moderate Incursion Severity'), 1000))
-
-        self.addParameter(QgsProcessingParameterString(
-            self.buffDistIS_low, self.tr('Buffer distance - Low Incursion Severity'), 1500))
-        # ===========================================================================
-        # uwrBuffered - output buffered layer
-        # ===========================================================================
-        self.addParameter(QgsProcessingParameterFeatureSink(
-            self.uwrBuffered, self.tr('Output buffered layer')))
 
     def processAlgorithm(self, parameters, context, feedback):
         """
@@ -515,11 +501,9 @@ class flightPathConvert(QgsProcessingAlgorithm):
         # Retrieve the feature source and sink. The 'dest_id' variable is used
         # to uniquely identify the feature sink, and must be included in the
         # dictionary returned by the processAlgorithm function.
-        origUWR_source = self.parameterAsSource(parameters, self.origUWR, context)
-        uwrBuffered_output = self.parameterAsOutputLayer(parameters, self.uwrBuffered, context)
-        origUWR = parameters['origUWR']
+        uwrBuffered = self.parameterAsSource(parameters, self.uwrBuffered, context)
         gpxFolder = parameters['gpxFolder']
-        feedback.setProgressText(str(origUWR))
+        DEM = self.parameterAsSource(parameters, self.DEM, context)
 
         # ==============================================================
         # unit_no, eg. u-2-002
@@ -530,42 +514,6 @@ class flightPathConvert(QgsProcessingAlgorithm):
         unit_no_id = parameters['unit_id_no']
         uwr_unique_Field = "uwr_unique_id"
 
-        bufferDistList = [int(parameters['buffDistIS_high']), int(parameters['buffDistIS_moderate']),
-                          int(parameters['buffDistIS_low'])]
-        feedback.setProgressText(str(bufferDistList))
-
-        # ===========================================================================
-        # Check if the input vector includes invalid geometry
-        # ===========================================================================
-        result = processing.run("qgis:checkvalidity", {
-            'INPUT_LAYER': parameters['origUWR']})
-        errorCount = result['ERROR_COUNT']
-        feedback.setProgressText(str(errorCount))
-
-        # ===========================================================================
-        # Fix the input geometry if invalid found, and replace the input for further process
-        # ===========================================================================
-        if errorCount > 0:
-            fixGeom = processing.run("native:fixgeometries",
-                                     {'INPUT': parameters['origUWR'],
-                                      'OUTPUT': 'TEMPORARY_OUTPUT'})
-            feedback.setProgressText('Geometry fixed')
-            origUWR = fixGeom['OUTPUT']
-
-        # ===========================================================================
-        # Calculate the uwr_unique_id field value
-        # ===========================================================================
-        final = processing.run("native:fieldcalculator",
-                               {'FIELD_LENGTH' : 100,
-                                'FIELD_NAME' : uwr_unique_Field,
-                                'NEW_FIELD' : True,
-                                'FIELD_PRECISION' : 0,
-                                'FIELD_TYPE' : 2,
-                                'FORMULA' : f' "{unit_no}" + \'__\' + "{unit_no_id}" ',
-                                'INPUT' : origUWR,
-                                'OUTPUT' : uwrBuffered_output }, context = context, feedback = feedback)['OUTPUT']
-        feedback.setProgressText(f'{uwr_unique_Field} added and updated')
-
         # ===========================================================================
         # Loop through the input GPX folder and get all the gpx files
         # ===========================================================================
@@ -575,8 +523,8 @@ class flightPathConvert(QgsProcessingAlgorithm):
             count += 1
             feedback.setProgressText(f'{str(count)}: {str(gpxFile)}')
 
-        total = 100.0 / origUWR_source.featureCount() if origUWR_source.featureCount() else 0
-        features = origUWR_source.getFeatures()
+        total = 100.0 / uwrBuffered.featureCount() if uwrBuffered.featureCount() else 0
+        features = uwrBuffered.getFeatures()
 
         for current, feature in enumerate(features):
             # Stop the algorithm if cancel button has been clicked
@@ -593,7 +541,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
 
-        return {self.uwrBuffered: final}
+        return
 
     def name(self):
         """
