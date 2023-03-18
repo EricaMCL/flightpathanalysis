@@ -96,7 +96,7 @@ def rawBuffer(origFCLoc, origFCName, bufferDistanceInput, bufferDist, projectFol
 
     return projectFolder, rawBuffer
 
-def findBufferRange(UseToErasePath, ToErasePath, uniqueIDFields, projectFolder, bufferDist):
+def findBufferRange(UseToErasePath, ToErasePath, uniqueIDFields, delFolder, bufferDist):
     useToEraseLyr = processing.run("native:savefeatures",
                                    {'INPUT': UseToErasePath,
                                     'OUTPUT': 'TEMPORARY_OUTPUT',
@@ -151,14 +151,14 @@ def findBufferRange(UseToErasePath, ToErasePath, uniqueIDFields, projectFolder, 
                                               'INPUT': ToEraseLyr,
                                               'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
-        out_features = projectFolder + "\\outfeature" + str(out_count) + '__' + str(bufferDist)
+        out_features = delFolder + "\\outfeature" + str(out_count) + '__' + str(bufferDist)
         processing.run("native:difference", {'INPUT': ToEraseLyr_selected,
                                              'OVERLAY': useToEraseLyr_selected,
                                              'OUTPUT': out_features, 'GRID_SIZE': None})
 
         bufferedFeatures.append(out_features + '.gpkg|layername=' + "outfeature" + str(out_count) + '__' + str(bufferDist))
 
-
+    projectFolder = os.path.split(delFolder)[0]
     # merge all outputs
     outputPath = os.path.join(projectFolder, 'rawBuffer_' + str(bufferDist) + 'only')
     output = processing.run("native:mergevectorlayers", {'LAYERS': bufferedFeatures,
