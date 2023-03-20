@@ -49,8 +49,9 @@ from qgis.core import (QgsProcessing,
 import glob
 import os
 import processing
-from .flightPathAnalysis_Function_QGIS import rawBuffer, findBufferRange
+from .flightPathAnalysis_Function_QGIS import rawBuffer, findBufferRange, replaceNonAlphaNum, convert_timedelta
 import shutil
+from pathlib import Path
 
 
 
@@ -91,8 +92,7 @@ class createUWRBuffer(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterFeatureSource(
             self.origUWR, self.tr('Input original UWR'), [QgsProcessing.TypeVectorPolygon]))
         # ===========================================================================
-        # gpx - Input Folder
-        # will loop through all the gpx files under the folder
+        # Project Folder
         # ===========================================================================
         self.addParameter(QgsProcessingParameterFile(
             self.projectFolder, self.tr('Project Folder'), QgsProcessingParameterFile.Folder))
@@ -457,7 +457,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
     # Constants used to refer to parameters and outputs. They will be
     # used when calling the algorithm from another algorithm, or when
     # calling from the QGIS console.
-
+    projectFolder = 'projectFolder'
     gpxFolder = 'gpxFolder'
     uwrBuffered = 'uwrBuffered'
     unit_id = 'unit_id'
@@ -470,17 +470,22 @@ class flightPathConvert(QgsProcessingAlgorithm):
         with some other properties.
         """
         # ===========================================================================
-        # OrigUWR - Input vector polygon
+        # Project Folder
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterFile(
+            self.projectFolder, self.tr('Project Folder'), QgsProcessingParameterFile.Folder, defaultValue='C:\LWRSProject_QGIS\Buffer'))
+        # ===========================================================================
+        # uwrBuffered
         # ===========================================================================
         self.addParameter(QgsProcessingParameterFeatureSource(
-            self.uwrBuffered, self.tr('Input uwrBuffered'), [QgsProcessing.TypeVectorPolygon]))
+            self.uwrBuffered, self.tr('Input uwrBuffered'), [QgsProcessing.TypeVectorPolygon],defaultValue='C:/LWRSProject_QGIS/Buffer/uwrBuffered_updated.gpkg|layername=uwrBuffered_updated'))
 
         # ===========================================================================
         # gpx - Input Folder
         # will loop through all the gpx files under the folder
         # ===========================================================================
         self.addParameter(QgsProcessingParameterFile(
-            self.gpxFolder, self.tr('Input gpx folder'), QgsProcessingParameterFile.Folder))
+            self.gpxFolder, self.tr('Input gpx folder'), QgsProcessingParameterFile.Folder, defaultValue='C:\\LWRSProject_QGIS\\mountaingoatflightlinesamplegpxfiles'))
 
         # ===========================================================================
         # unit_id / unit_id_no - Input string
@@ -496,7 +501,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
         # DEM
         # ===========================================================================
         self.addParameter(QgsProcessingParameterRasterLayer(
-            self.DEM, self.tr('Input the project DEM'), QgsProcessing.TypeRaster))
+            self.DEM, self.tr('Input the project DEM'), 'C:/LWRSProject_QGIS/origDEM/origDEM/project_dem_Clip.tif'))
 
     def processAlgorithm(self, parameters, context, feedback):
         """
@@ -505,6 +510,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
         # Retrieve the feature source and sink. The 'dest_id' variable is used
         # to uniquely identify the feature sink, and must be included in the
         # dictionary returned by the processAlgorithm function.
+        projectFolder = parameters['projectFolder']
         uwrBuffered = self.parameterAsSource(parameters, self.uwrBuffered, context)
         uwrBufferedPath = parameters['uwrBuffered']
         gpxFolder = parameters['gpxFolder']
@@ -529,6 +535,9 @@ class flightPathConvert(QgsProcessingAlgorithm):
         for gpxFile in gpxFiles:
             count += 1
             feedback.setProgressText(f'{str(count)}: {str(gpxFile)}')
+            gpxFormattedName = replaceNonAlphaNum(Path(gpxFile).stem, '_')
+            feedback.setProgressText(f'{gpxFormattedName}')
+
             gpxDict = {'tkpt': '|layername=track_points', 'tkline': '|layername=tracks'}
             rowCount = processing.run("qgis:basicstatisticsforfields",
                                       {'INPUT_LAYER': gpxFile + gpxDict['tkpt'],
@@ -539,21 +548,33 @@ class flightPathConvert(QgsProcessingAlgorithm):
             if tkLyrNameIndex != None:
                 tkLyrFeatures = tkLyr.getFeatures()
                 for feature in tkLyrFeatures:
-                    tkLyrName = feature.attributes()[tkLyrNameIndex]
+                    tkLyrName = str(feature.attributes()[tkLyrNameIndex])
                     feedback.setProgressText(f'{tkLyrName}')
             feedback.setProgressText(f'{rowCount}')
             # ===========================================================================
             # Add the Name field from tracks layer to track points layer
             # ===========================================================================
+            gpxTempPath = os.path.join(projectFolder, 'temp_' + gpxFormattedName)
+            feedback.setProgressText(f'{gpxTempPath}')
+            gpxTemp_saved = processing.run("native:savefeatures",
+                                           {'INPUT': gpxFile + gpxDict['tkpt'],
+                                            'OUTPUT': 'TEMPORARY_OUTPUT',
+                                            'LAYER_NAME': '',
+                                            'DATASOURCE_OPTIONS': '',
+                                            'LAYER_OPTIONS': ''})['OUTPUT']
+
             gpxTemp = processing.run("native:fieldcalculator",
                                    {'FIELD_LENGTH': 100,
-                                    'FIELD_NAME': 'Name',
+                                    'FIELD_NAME': 'name_new',
                                     'NEW_FIELD': True,
-                                    'FIELD_PRECISION': 2,
-                                    'FIELD_TYPE': 0,
-                                    'FORMULA': f'"{tkLyrName}"',
-                                    'INPUT': gpxFile + gpxDict['tkpt'],
-                                    'OUTPUT': 'TEMPORARY_OUTPUT'}, context=context, feedback=feedback)['OUTPUT']
+                                    'FIELD_PRECISION': 0,
+                                    'FIELD_TYPE': 2,
+                                    'FORMULA': "'ihluigly'",
+                                    'INPUT': gpxTemp_saved,
+                                    'OUTPUT': gpxTempPath}, context=context, feedback=feedback)['OUTPUT']
+
+
+
             gpxTemps.append(gpxTemp)
             feedback.setProgressText(f'{gpxTemps}')
 
@@ -577,7 +598,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
 
-        return {self.uwrBuffered: final}
+        return
 
     def name(self):
         """
