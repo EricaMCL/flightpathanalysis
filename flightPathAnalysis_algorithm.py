@@ -569,7 +569,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                     'NEW_FIELD': True,
                                     'FIELD_PRECISION': 0,
                                     'FIELD_TYPE': 2,
-                                    'FORMULA': "'ihluigly'",
+                                    'FORMULA':  f"'{tkLyrName}'",
                                     'INPUT': gpxTemp_saved,
                                     'OUTPUT': gpxTempPath}, context=context, feedback=feedback)['OUTPUT']
 
