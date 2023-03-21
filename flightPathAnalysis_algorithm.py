@@ -515,6 +515,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
         uwrBufferedPath = parameters['uwrBuffered']
         gpxFolder = parameters['gpxFolder']
         DEM = self.parameterAsSource(parameters, self.DEM,context)
+        IncursionSeverity = {0: "In UWR", 500: "High", 1000: "Moderate", 1500: "Low"}
         feedback.setProgressText(str(uwrBuffered))
 
         # ==============================================================
@@ -525,6 +526,20 @@ class flightPathConvert(QgsProcessingAlgorithm):
         unit_no = parameters['unit_id']
         unit_no_id = parameters['unit_id_no']
         uwr_unique_Field = "uwr_unique_id"
+
+        # ==============================================================
+        # Create variables for converting all gpx files into fc
+        # timeIntervalDict - dictionary of different time intervals and the flight points in each
+        # flightLines - lists of flight lines
+        # flightCount - count of flight lines
+        # totalSeasonTime- total flight time in the season
+        # checkFilesList - checkFilesList
+        # ==============================================================
+        timeIntervalDict = {}
+        flightLines = []
+        flightCount = 0
+        totalSeasonTime = 0
+        checkFilesList = []
 
         # ===========================================================================
         # Loop through the input GPX folder and get the row counts
@@ -551,6 +566,51 @@ class flightPathConvert(QgsProcessingAlgorithm):
                     tkLyrName = str(feature.attributes()[tkLyrNameIndex])
                     feedback.setProgressText(f'{tkLyrName}')
             feedback.setProgressText(f'{rowCount}')
+
+            # ==============================================================
+            # Checks for files with consistent time intervals.
+            #  - All fc with same time intervals are grouped together in the dictionary
+            #  - If there are more than 2 rows
+            #       - find time between point recorded halfway through the flight and the point recorded right before it.
+            #       - else,time for objectid 3 - objectid 2 because there was an instance where there were 4 minutes between id 1 and 2.
+            #         assume only seconds between them the two points
+            # ==============================================================
+            if int(rowCount) > 2:
+                half = round(int(rowCount) / 2)
+                sel = (half - 1, half)
+                query = "OBJECTID in " + str(sel)
+
+                tkptLyr_id = processing.run("native:fieldcalculator",
+                                         {'FIELD_LENGTH': 100,
+                                          'FIELD_NAME': 'OBJECTID',
+                                          'NEW_FIELD': True,
+                                          'FIELD_PRECISION': 0,
+                                          'FIELD_TYPE': 0,
+                                          'FORMULA': '@id',
+                                          'INPUT': gpxFile + gpxDict['tkpt'],
+                                          'OUTPUT': os.path.join(projectFolder, 'tkptLy5rID')})['OUTPUT']
+                tkptLyrExtracted = processing.run("native:extractbyexpression",
+                                                {'EXPRESSION': query,
+                                                 'INPUT': tkptLyr_id,
+                                                 'OUTPUT': os.path.join(projectFolder, 'Extracted')})['OUTPUT']
+                tkptLyr = QgsVectorLayer((tkptLyrExtracted), "", "ogr")
+                tkptExtractedTimeIndex = (tkptLyr.fields().names()).index('time')
+                feedback.setProgressText(f'{tkptExtractedTimeIndex}')
+                features = tkptLyr.getFeatures()
+                values = []
+                count = 0
+                for f in features:
+                    count += 1
+                    timeValue = f.attributes()[tkptExtractedTimeIndex]
+                    values.append(timeValue)
+                timeInterval = values[1].toTime_t() - values[0].toTime_t()
+                feedback.setProgressText(f'{timeInterval}')
+                feedback.setProgressText(f'{count}')
+
+
+            else:
+
+                continue
             # ===========================================================================
             # Add the Name field from tracks layer to track points layer
             # ===========================================================================
@@ -573,10 +633,22 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                     'INPUT': gpxTemp_saved,
                                     'OUTPUT': gpxTempPath}, context=context, feedback=feedback)['OUTPUT']
 
-
-
             gpxTemps.append(gpxTemp)
             feedback.setProgressText(f'{gpxTemps}')
+
+
+        mergedGPX = os.path.join(projectFolder, 'mergedGPX')
+        gpxMerged = processing.run("native:mergevectorlayers",
+                                    {'LAYERS': gpxTemps,
+                                     'CRS': None,
+                                     'OUTPUT': mergedGPX})['OUTPUT']
+        rowCount = processing.run("qgis:basicstatisticsforfields",
+                                  {'INPUT_LAYER': gpxMerged,
+                                   'FIELD_NAME': 'time',
+                                   'OUTPUT_HTML_FILE': 'TEMPORARY_OUTPUT'})['COUNT']
+        feedback.setProgressText(f'{rowCount}')
+
+
 
 
 
