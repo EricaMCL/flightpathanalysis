@@ -92,8 +92,16 @@ def rawBuffer(origFCLoc, origFCName, bufferDistanceInput, bufferDist, projectFol
                                 'FIELD_TYPE': 2,
                                 'FORMULA': f' "{unit_no}" + \'__\' + "{unit_no_id}" ',
                                 'INPUT': tempBufferLyr_fid_removed,
+                                'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+    bufferLyrDist = processing.run("native:fieldcalculator",
+                               {'FIELD_LENGTH': 100,
+                                'FIELD_NAME': 'BUFF_DIST',
+                                'NEW_FIELD': True,
+                                'FIELD_PRECISION': 0,
+                                'FIELD_TYPE': 0,
+                                'FORMULA': f"'{bufferDist}'",
+                                'INPUT': bufferLyr,
                                 'OUTPUT': os.path.join(projectFolder, rawBuffer)})
-
     return projectFolder, rawBuffer
 
 def findBufferRange(UseToErasePath, ToErasePath, uniqueIDFields, delFolder, bufferDist):

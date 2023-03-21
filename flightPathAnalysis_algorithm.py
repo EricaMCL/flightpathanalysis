@@ -132,247 +132,259 @@ class createUWRBuffer(QgsProcessingAlgorithm):
         feedback.setProgressText(str(origUWR))
         uwrBufferedPath = os.path.join(projectFolder, 'uwrBuffered')
         delFolder = os.path.join(projectFolder, 'delFolder')
-        if os.path.exists(delFolder):
-            shutil.rmtree(delFolder)
-            os.mkdir(delFolder)
-        else:
-            os.mkdir(delFolder)
+        final = None
 
-        # ==============================================================
-        # unit_no, eg. u-2-002
-        # unit_no_id, eg. Mg-106
-        # unit_unique_field, field that combines uwr number and uwr unit number
-        # ==============================================================
-        unit_no = parameters['unit_id']
-        unit_no_id = parameters['unit_id_no']
-        uwr_unique_Field = "uwr_unique_id"
+        try:
 
-        bufferDistList = [int(parameters['buffDistIS_high']), int(parameters['buffDistIS_moderate']),
-                          int(parameters['buffDistIS_low'])]
-        feedback.setProgressText(str(bufferDistList))
-
-        # ===========================================================================
-        # Check if the input vector includes invalid geometry
-        # ===========================================================================
-        result = processing.run("qgis:checkvalidity", {
-            'INPUT_LAYER': parameters['origUWR']})
-        errorCount = result['ERROR_COUNT']
-        feedback.setProgressText(str(errorCount))
-
-        # ===========================================================================
-        # Fix the input geometry if invalid found, and replace the input for further process
-        # ===========================================================================
-        if errorCount > 0:
-            fixGeom = processing.run("native:fixgeometries",
-                                     {'INPUT': parameters['origUWR'],
-                                      'OUTPUT': 'TEMPORARY_OUTPUT'})
-            feedback.setProgressText('Geometry fixed')
-            origUWR = fixGeom['OUTPUT']
-
-        # ==============================================================
-        # Get list of relevant UWR
-        # ==============================================================
-        origUWRFieldList = origUWR.fields().names()
-        unit_no_index = origUWRFieldList.index(unit_no)
-        unit_no_id_index = origUWRFieldList.index(unit_no_id)
-        feedback.setProgressText(f'{unit_no_id_index, unit_no_index}')
-        uwrSet = set()
-        for feature in origUWR.getFeatures():
-            uwr_unique_Field_value = f'{feature.attributes()[unit_no_index]}__{feature.attributes()[unit_no_id_index]}'
-            uwrSet.add(uwr_unique_Field_value)
-        feedback.setProgressText(f'{uwr_unique_Field} added and updated')
-
-        # ==============================================================
-        # Check existence of uwrBuffered in project folder
-        # ==============================================================
-        uwrBuffered_exist = os.path.isfile(uwrBufferedPath + '.gpkg')
-
-        # ==============================================================
-        # Get list of uwr that have buffers created
-        # ==============================================================
-        if uwrBuffered_exist:
-
-            feedback.setProgressText(f'uwrBuffered exists in project folder.')
-            createdUWRSet = set()
-            uwrBuffered_layer = QgsVectorLayer((uwrBufferedPath + '.gpkg'), "uwrBuffered", "ogr")
-            uwrBufferedFieldList = uwrBuffered_layer.fields().names()
-            feedback.setProgressText(f'{uwrBufferedFieldList}')
-            uwr_unique_Field_index = uwrBufferedFieldList.index(uwr_unique_Field)
-            feedback.setProgressText(f'{uwrBufferedFieldList}')
-            for feature in uwrBuffered_layer.getFeatures():
-                uwr_unique_Field_value =  f'{feature.attributes()[uwr_unique_Field_index]}'
-                createdUWRSet.add(uwr_unique_Field_value)
-
-            uwrRequireSet = uwrSet - createdUWRSet
-            feedback.setProgressText(f'{uwrSet} --uwrSet')
-            feedback.setProgressText(f'{createdUWRSet} -- createdUWRSet')
-            feedback.setProgressText(f'{uwrRequireSet} --uwrRequireSet')
-
-        else:
-            uwrRequireSet = uwrSet
-            feedback.setProgressText(f'uwrBuffered NOT exists in project folder.')
-
-
-        if len(uwrRequireSet) > 0:
-            if uwrBuffered_exist:
-            # ==============================================================
-            # Make new field in copy of orig UWR FC for unique UWR id.
-            # DIFFERENT FROM unique uwr id. make it so that there's no way this field existed before
-            # ==============================================================
-                tempUniqueUWRField = 'tempUniqueUWRField'
-                if tempUniqueUWRField not in origUWRFieldList:
-                    tempGPKG = processing.run("native:fieldcalculator",
-                                              {'FIELD_LENGTH': 100,
-                                               'FIELD_NAME': tempUniqueUWRField,
-                                               'NEW_FIELD': True,
-                                               'FIELD_PRECISION': 0,
-                                               'FIELD_TYPE': 2,
-                                               'FORMULA': f' "{unit_no}" + \'__\' + "{unit_no_id}" ',
-                                               'INPUT': origUWR,
-                                               'OUTPUT': 'TEMPORARY_OUTPUT'}, context=context, feedback=feedback)['OUTPUT']
-
-
-                # ==============================================================
-                # Select require uwr by making query with uwrRequireSet
-                # ==============================================================
-                uwrList_String = "','".join(uwrRequireSet)
-                unbufferedFL = os.path.join(projectFolder, 'unbufferedUWR')
-                expression = tempUniqueUWRField + " in ('" + uwrList_String + "')"
-                unbufferedFLPath = processing.run("native:extractbyexpression",
-                               {'EXPRESSION': expression,
-                                'INPUT': tempGPKG,
-                                'OUTPUT': unbufferedFL})['OUTPUT']
-                feedback.setProgressText(f'unBufferedUWR created in {unbufferedFL}')
-                requireUWRLayer = unbufferedFLPath
+            if os.path.exists(delFolder):
+                shutil.rmtree(delFolder)
+                os.mkdir(delFolder)
             else:
-                requireUWRLayer = origUWR
-                feedback.setProgressText('requireUWRLayer = origUWR')
+                os.mkdir(delFolder)
 
             # ==============================================================
-            # Dissolves input feature class by dissolveFields list if list is given
-            # This is to avoid errors for multi-part uwr that have been split into
-            # separate features in the original uwr feature class.
+            # unit_no, eg. u-2-002
+            # unit_no_id, eg. Mg-106
+            # unit_unique_field, field that combines uwr number and uwr unit number
             # ==============================================================
-            dissolvedOrigPath = os.path.join(projectFolder, 'dissolve')
-            dissolvedOrig = processing.run("native:dissolve",
-                                           {'FIELD': ['UWR_TAG', 'UNIT_NO'],
-                                            'INPUT': requireUWRLayer,
-                                            'OUTPUT': 'TEMPORARY_OUTPUT',
-                                            'SEPARATE_DISJOINT': False})['OUTPUT']
-            dissolvedOrig_fid_removed = processing.run("native:deletecolumn",
-                                           {'COLUMN': ['fid'],
-                                            'INPUT': dissolvedOrig,
-                                            'OUTPUT': dissolvedOrigPath})['OUTPUT']
+            unit_no = parameters['unit_id']
+            unit_no_id = parameters['unit_id_no']
+            uwr_unique_Field = "uwr_unique_id"
 
-            # ============re==================================================
-            # Start list of intermediate features to be deleted
-            # ==============================================================
-            uwrOnly = "BufferUWROnly"
-            delFC = [os.path.join(projectFolder, uwrOnly)]
+            bufferDistList = [int(parameters['buffDistIS_high']), int(parameters['buffDistIS_moderate']),
+                              int(parameters['buffDistIS_low'])]
+            feedback.setProgressText(str(bufferDistList))
 
-            # ==============================================================
-            # Create raw buffers
-            # ==============================================================
-            rawBufferDict = {}
-            for bufferDist in bufferDistList:
-                rawBufferLoc, rawBufferName = rawBuffer(projectFolder, 'dissolve.gpkg',
-                                              str(bufferDist) + 'Meters', bufferDist, delFolder,
-                                                  unit_no, unit_no_id, uwr_unique_Field)
-                rawBufferDict[bufferDist] = [rawBufferLoc, rawBufferName]
-                delFC.append(os.path.join(rawBufferLoc, rawBufferName))
-                feedback.setProgressText(f"raw buffer created, {rawBufferName}")
+            # ===========================================================================
+            # Check if the input vector includes invalid geometry
+            # ===========================================================================
+            result = processing.run("qgis:checkvalidity", {
+                'INPUT_LAYER': parameters['origUWR']})
+            errorCount = result['ERROR_COUNT']
+            feedback.setProgressText(str(errorCount))
+
+            # ===========================================================================
+            # Fix the input geometry if invalid found, and replace the input for further process
+            # ===========================================================================
+            if errorCount > 0:
+                fixGeom = processing.run("native:fixgeometries",
+                                         {'INPUT': parameters['origUWR'],
+                                          'OUTPUT': 'TEMPORARY_OUTPUT'})
+                feedback.setProgressText('Geometry fixed')
+                origUWR = fixGeom['OUTPUT']
 
             # ==============================================================
-            # Get donut shaped buffer to only get list of buffered donut polygons
-            # that will be merge together to the final layer
+            # Get list of relevant UWR
             # ==============================================================
-            requireMergeBufferList = []
+            origUWRFieldList = origUWR.fields().names()
+            unit_no_index = origUWRFieldList.index(unit_no)
+            unit_no_id_index = origUWRFieldList.index(unit_no_id)
+            feedback.setProgressText(f'{unit_no_id_index, unit_no_index}')
+            uwrSet = set()
+            for feature in origUWR.getFeatures():
+                uwr_unique_Field_value = f'{feature.attributes()[unit_no_index]}__{feature.attributes()[unit_no_id_index]}'
+                uwrSet.add(uwr_unique_Field_value)
+            feedback.setProgressText(f'{uwr_unique_Field} added and updated')
 
             # ==============================================================
-            # Go through each buffer distance to get the donut shapes of
-            # only the area for each buffer distance
+            # Check existence of uwrBuffered in project folder
             # ==============================================================
-            uniqueIDFields = [unit_no, unit_no_id]
-            sortBufferDistList = list(sorted(bufferDistList))
-            feedback.setProgressText(f'{sortBufferDistList} -- sortedBuffer')
-            for bufferDist in sortBufferDistList:
-                ToEraseLoc = rawBufferDict[bufferDist][0]
-                ToEraseName = rawBufferDict[bufferDist][1] + '.gpkg'
-                ToErasePath = os.path.join(ToEraseLoc, ToEraseName)
-                feedback.setProgressText(f'{ToEraseLoc} and {ToEraseName}')
-                feedback.setProgressText(f'{bufferDist} -- Bufferdist')
+            uwrBuffered_exist = os.path.isfile(uwrBufferedPath + '.gpkg')
 
-                if sortBufferDistList.index(bufferDist) == 0:
-                    onlyBufferDist = findBufferRange(dissolvedOrig_fid_removed, ToErasePath, uniqueIDFields, delFolder, bufferDist)
-                    feedback.setProgressText(f'UseToErasePath - {dissolvedOrig_fid_removed}')
-                    feedback.setProgressText(f'ToErasePath - {ToErasePath}')
+            # ==============================================================
+            # Get list of uwr that have buffers created
+            # ==============================================================
+            if uwrBuffered_exist:
+
+                feedback.setProgressText(f'uwrBuffered exists in project folder.')
+                createdUWRSet = set()
+                uwrBuffered_layer = QgsVectorLayer((uwrBufferedPath + '.gpkg'), "uwrBuffered", "ogr")
+                uwrBufferedFieldList = uwrBuffered_layer.fields().names()
+                feedback.setProgressText(f'{uwrBufferedFieldList}')
+                uwr_unique_Field_index = uwrBufferedFieldList.index(uwr_unique_Field)
+                feedback.setProgressText(f'{uwrBufferedFieldList}')
+                for feature in uwrBuffered_layer.getFeatures():
+                    uwr_unique_Field_value =  f'{feature.attributes()[uwr_unique_Field_index]}'
+                    createdUWRSet.add(uwr_unique_Field_value)
+
+                uwrRequireSet = uwrSet - createdUWRSet
+                feedback.setProgressText(f'{uwrSet} --uwrSet')
+                feedback.setProgressText(f'{createdUWRSet} -- createdUWRSet')
+                feedback.setProgressText(f'{uwrRequireSet} --uwrRequireSet')
+
+            else:
+                uwrRequireSet = uwrSet
+                feedback.setProgressText(f'uwrBuffered NOT exists in project folder.')
+
+
+            if len(uwrRequireSet) > 0:
+                if uwrBuffered_exist:
+                # ==============================================================
+                # Make new field in copy of orig UWR FC for unique UWR id.
+                # DIFFERENT FROM unique uwr id. make it so that there's no way this field existed before
+                # ==============================================================
+                    tempUniqueUWRField = 'tempUniqueUWRField'
+                    if tempUniqueUWRField not in origUWRFieldList:
+                        tempGPKG = processing.run("native:fieldcalculator",
+                                                  {'FIELD_LENGTH': 100,
+                                                   'FIELD_NAME': tempUniqueUWRField,
+                                                   'NEW_FIELD': True,
+                                                   'FIELD_PRECISION': 0,
+                                                   'FIELD_TYPE': 2,
+                                                   'FORMULA': f' "{unit_no}" + \'__\' + "{unit_no_id}" ',
+                                                   'INPUT': origUWR,
+                                                   'OUTPUT': 'TEMPORARY_OUTPUT'}, context=context, feedback=feedback)['OUTPUT']
+
+
+                    # ==============================================================
+                    # Select require uwr by making query with uwrRequireSet
+                    # ==============================================================
+                    uwrList_String = "','".join(uwrRequireSet)
+                    unbufferedFL = os.path.join(projectFolder, 'unbufferedUWR')
+                    expression = tempUniqueUWRField + " in ('" + uwrList_String + "')"
+                    unbufferedFLPath = processing.run("native:extractbyexpression",
+                                   {'EXPRESSION': expression,
+                                    'INPUT': tempGPKG,
+                                    'OUTPUT': unbufferedFL})['OUTPUT']
+                    feedback.setProgressText(f'unBufferedUWR created in {unbufferedFL}')
+                    requireUWRLayer = unbufferedFLPath
                 else:
-                    prevIndex = sortBufferDistList.index(bufferDist) - 1
-                    prevBufferDist = sortBufferDistList[prevIndex]
-                    prevBufferPath = os.path.join(rawBufferDict[prevBufferDist][0], rawBufferDict[prevBufferDist][1] + '.gpkg')
-                    feedback.setProgressText(prevBufferPath)
-                    feedback.setProgressText(f'UseToErasePath - {prevBufferPath}')
-                    feedback.setProgressText(f'ToErasePath - {ToErasePath}')
-                    onlyBufferDist = findBufferRange(prevBufferPath, ToErasePath, uniqueIDFields, delFolder, bufferDist)
+                    requireUWRLayer = origUWR
+                    feedback.setProgressText('requireUWRLayer = origUWR')
 
-                requireMergeBufferList.append(onlyBufferDist)
-                feedback.setProgressText(f'appended uwronly{onlyBufferDist} -- onlyBufferDist')
+                # ==============================================================
+                # Dissolves input feature class by dissolveFields list if list is given
+                # This is to avoid errors for multi-part uwr that have been split into
+                # separate features in the original uwr feature class.
+                # ==============================================================
+                dissolvedOrigPath = os.path.join(projectFolder, 'dissolve')
+                dissolvedOrig = processing.run("native:dissolve",
+                                               {'FIELD': ['UWR_TAG', 'UNIT_NO'],
+                                                'INPUT': requireUWRLayer,
+                                                'OUTPUT': 'TEMPORARY_OUTPUT',
+                                                'SEPARATE_DISJOINT': False})['OUTPUT']
+                dissolvedOrig_fid_removed = processing.run("native:deletecolumn",
+                                               {'COLUMN': ['fid'],
+                                                'INPUT': dissolvedOrig,
+                                                'OUTPUT': dissolvedOrigPath})['OUTPUT']
 
-            # ==============================================================
-            # Create bufferUWROnly_NEW with uwr_unique_field and BUFF_DIST fields
-            # ==============================================================
-            uwrOnlyNewPath = os.path.join(projectFolder, uwrOnly)
-            uwrOnly_new = processing.run("native:savefeatures",
-                                           {'INPUT': dissolvedOrig_fid_removed,
-                                            'OUTPUT': 'TEMPORARY_OUTPUT',
-                                            'LAYER_NAME': '',
-                                            'DATASOURCE_OPTIONS': '',
-                                            'LAYER_OPTIONS': ''})['OUTPUT']
+                # ============re==================================================
+                # Start list of intermediate features to be deleted
+                # ==============================================================
+                uwrOnly = "BufferUWROnly"
+                delFC = [os.path.join(projectFolder, uwrOnly)]
 
-            uwrOnly_new_uniField = processing.run("native:fieldcalculator",
-                                   {'FIELD_LENGTH': 100,
-                                    'FIELD_NAME': uwr_unique_Field,
-                                    'NEW_FIELD': True,
-                                    'FIELD_PRECISION': 0,
-                                    'FIELD_TYPE': 2,
-                                    'FORMULA': f' "{unit_no}" + \'__\' + "{unit_no_id}" ',
-                                    'INPUT': uwrOnly_new,
-                                    'OUTPUT': 'TEMPORARY_OUTPUT'}, context=context, feedback=feedback)['OUTPUT']
+                # ==============================================================
+                # Create raw buffers
+                # ==============================================================
+                rawBufferDict = {}
+                for bufferDist in bufferDistList:
+                    rawBufferLoc, rawBufferName = rawBuffer(projectFolder, 'dissolve.gpkg',
+                                                  str(bufferDist) + 'Meters', bufferDist, delFolder,
+                                                      unit_no, unit_no_id, uwr_unique_Field)
+                    rawBufferDict[bufferDist] = [rawBufferLoc, rawBufferName]
+                    delFC.append(os.path.join(rawBufferLoc, rawBufferName))
+                    feedback.setProgressText(f"raw buffer created, {rawBufferName}")
 
-            uwrOnly_new_uniField_buffDist = processing.run("native:fieldcalculator",
-                                   {'FIELD_LENGTH': 100,
-                                    'FIELD_NAME': 'BUFF_DIST',
-                                    'NEW_FIELD': True,
-                                    'FIELD_PRECISION': 0,
-                                    'FIELD_TYPE': 0,
-                                    'FORMULA': 0,
-                                    'INPUT': uwrOnly_new_uniField,
-                                    'OUTPUT': uwrOnlyNewPath}, context=context, feedback=feedback)['OUTPUT']
-            requireMergeBufferList.append(uwrOnly_new_uniField_buffDist)
+                # ==============================================================
+                # Get donut shaped buffer to only get list of buffered donut polygons
+                # that will be merge together to the final layer
+                # ==============================================================
+                requireMergeBufferList = []
 
-            feedback.setProgressText(f'{uwrOnly_new_uniField_buffDist} created')
+                # ==============================================================
+                # Go through each buffer distance to get the donut shapes of
+                # only the area for each buffer distance
+                # ==============================================================
+                uniqueIDFields = [unit_no, unit_no_id]
+                sortBufferDistList = list(sorted(bufferDistList))
+                feedback.setProgressText(f'{sortBufferDistList} -- sortedBuffer')
+                for bufferDist in sortBufferDistList:
+                    ToEraseLoc = rawBufferDict[bufferDist][0]
+                    ToEraseName = rawBufferDict[bufferDist][1] + '.gpkg'
+                    ToErasePath = os.path.join(ToEraseLoc, ToEraseName)
+                    feedback.setProgressText(f'{ToEraseLoc} and {ToEraseName}')
+                    feedback.setProgressText(f'{bufferDist} -- Bufferdist')
 
-            # ==============================================================
-            # Append uwr into the final geopackage or create a new one
-            # ==============================================================
-            if uwrBuffered_exist:
-                requireMergeBufferList.append(uwrBuffered_layer)
-                final = processing.run("native:mergevectorlayers",
-                                       {'LAYERS': requireMergeBufferList,
-                                        'OUTPUT': uwrBufferedPath + '_updated'})['OUTPUT']
-                feedback.setProgressText('final geopackage exists')
+                    if sortBufferDistList.index(bufferDist) == 0:
+                        onlyBufferDist = findBufferRange(dissolvedOrig_fid_removed, ToErasePath, uniqueIDFields, delFolder, bufferDist)
+                        feedback.setProgressText(f'UseToErasePath - {dissolvedOrig_fid_removed}')
+                        feedback.setProgressText(f'ToErasePath - {ToErasePath}')
+                    else:
+                        prevIndex = sortBufferDistList.index(bufferDist) - 1
+                        prevBufferDist = sortBufferDistList[prevIndex]
+                        prevBufferPath = os.path.join(rawBufferDict[prevBufferDist][0], rawBufferDict[prevBufferDist][1] + '.gpkg')
+                        feedback.setProgressText(prevBufferPath)
+                        feedback.setProgressText(f'UseToErasePath - {prevBufferPath}')
+                        feedback.setProgressText(f'ToErasePath - {ToErasePath}')
+                        onlyBufferDist = findBufferRange(prevBufferPath, ToErasePath, uniqueIDFields, delFolder, bufferDist)
+
+                    requireMergeBufferList.append(onlyBufferDist)
+                    feedback.setProgressText(f'appended uwronly{onlyBufferDist} -- onlyBufferDist')
+
+                # ==============================================================
+                # Create bufferUWROnly_NEW with uwr_unique_field and BUFF_DIST fields
+                # ==============================================================
+                uwrOnlyNewPath = os.path.join(projectFolder, uwrOnly)
+                uwrOnly_new = processing.run("native:savefeatures",
+                                               {'INPUT': dissolvedOrig_fid_removed,
+                                                'OUTPUT': 'TEMPORARY_OUTPUT',
+                                                'LAYER_NAME': '',
+                                                'DATASOURCE_OPTIONS': '',
+                                                'LAYER_OPTIONS': ''})['OUTPUT']
+
+                uwrOnly_new_uniField = processing.run("native:fieldcalculator",
+                                       {'FIELD_LENGTH': 100,
+                                        'FIELD_NAME': uwr_unique_Field,
+                                        'NEW_FIELD': True,
+                                        'FIELD_PRECISION': 0,
+                                        'FIELD_TYPE': 2,
+                                        'FORMULA': f' "{unit_no}" + \'__\' + "{unit_no_id}" ',
+                                        'INPUT': uwrOnly_new,
+                                        'OUTPUT': 'TEMPORARY_OUTPUT'}, context=context, feedback=feedback)['OUTPUT']
+
+                uwrOnly_new_uniField_buffDist = processing.run("native:fieldcalculator",
+                                       {'FIELD_LENGTH': 100,
+                                        'FIELD_NAME': 'BUFF_DIST',
+                                        'NEW_FIELD': True,
+                                        'FIELD_PRECISION': 0,
+                                        'FIELD_TYPE': 0,
+                                        'FORMULA': 0,
+                                        'INPUT': uwrOnly_new_uniField,
+                                        'OUTPUT': uwrOnlyNewPath}, context=context, feedback=feedback)['OUTPUT']
+                requireMergeBufferList.append(uwrOnly_new_uniField_buffDist)
+
+                feedback.setProgressText(f'{uwrOnly_new_uniField_buffDist} created')
+
+                # ==============================================================
+                # Append uwr into the final geopackage or create a new one
+                # ==============================================================
+                if uwrBuffered_exist:
+                    requireMergeBufferList.append(uwrBuffered_layer)
+                    final = processing.run("native:mergevectorlayers",
+                                           {'LAYERS': requireMergeBufferList,
+                                            'OUTPUT': uwrBufferedPath + '_updated'})['OUTPUT']
+                    os.remove(uwrBufferedPath + '.gpkg')
+                    os.rename(final, uwrBufferedPath + '.gpkg')
+                    feedback.setProgressText('final geopackage exists')
+                else:
+                    final = processing.run("native:mergevectorlayers",
+                                           {'LAYERS': requireMergeBufferList,
+                                            'OUTPUT': uwrBufferedPath})['OUTPUT']
+                    for f in requireMergeBufferList:
+                        feedback.setProgressText(f'{f} merged')
+
+
             else:
-                final = processing.run("native:mergevectorlayers",
-                                       {'LAYERS': requireMergeBufferList,
-                                        'OUTPUT': uwrBufferedPath})['OUTPUT']
-                for f in requireMergeBufferList:
-                    feedback.setProgressText(f'{f} merged')
+                feedback.setProgressText(f'No Need to create uwr buffers')
 
+        except:
+            feedback.setProgressText('Something is wrong')
+
+        finally:
             shutil.rmtree(delFolder)
             feedback.setProgressText(f'{delFolder} deleted')
-
-        else:
-            feedback.setProgressText(f'No Need to create uwr buffers')
+            feedback.setProgressText('Completed')
 
 
         # ===========================================================================
@@ -397,7 +409,8 @@ class createUWRBuffer(QgsProcessingAlgorithm):
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
 
-        return
+        return  {'uwrBuffered': final}
+
 
     def name(self):
         """
