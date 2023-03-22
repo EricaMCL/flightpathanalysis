@@ -588,42 +588,47 @@ class flightPathConvert(QgsProcessingAlgorithm):
             #       - else,time for objectid 3 - objectid 2 because there was an instance where there were 4 minutes between id 1 and 2.
             #         assume only seconds between them the two points
             # ==============================================================
+            tkptLyr_id = processing.run("native:fieldcalculator",
+                                        {'FIELD_LENGTH': 100,
+                                         'FIELD_NAME': 'OBJECTID',
+                                         'NEW_FIELD': True,
+                                         'FIELD_PRECISION': 0,
+                                         'FIELD_TYPE': 0,
+                                         'FORMULA': '@id',
+                                         'INPUT': gpxFile + gpxDict['tkpt'],
+                                         'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+            query = None
             if int(rowCount) > 2:
                 half = round(int(rowCount) / 2)
                 sel = (half - 1, half)
                 query = "OBJECTID in " + str(sel)
+            elif int(rowCount) == 2:
+                half = round(int(rowCount) / 2)
+                sel = (half - 1, half)
+                query = "OBJECTID in (1,2)"
+            else:
+                checkFilesList.append(gpxFile)
+                continue
 
-                tkptLyr_id = processing.run("native:fieldcalculator",
-                                         {'FIELD_LENGTH': 100,
-                                          'FIELD_NAME': 'OBJECTID',
-                                          'NEW_FIELD': True,
-                                          'FIELD_PRECISION': 0,
-                                          'FIELD_TYPE': 0,
-                                          'FORMULA': '@id',
-                                          'INPUT': gpxFile + gpxDict['tkpt'],
-                                          'OUTPUT': os.path.join(projectFolder, 'tkptLy5rID')})['OUTPUT']
+            if query != None:
                 tkptLyrExtracted = processing.run("native:extractbyexpression",
                                                 {'EXPRESSION': query,
                                                  'INPUT': tkptLyr_id,
-                                                 'OUTPUT': os.path.join(projectFolder, 'Extracted')})['OUTPUT']
+                                                 'OUTPUT': os.path.join(projectFolder, 'tkptExtracted' + str(count))})['OUTPUT']
                 tkptLyr = QgsVectorLayer((tkptLyrExtracted), "", "ogr")
                 tkptExtractedTimeIndex = (tkptLyr.fields().names()).index('time')
                 feedback.setProgressText(f'{tkptExtractedTimeIndex}')
                 features = tkptLyr.getFeatures()
                 values = []
-                count = 0
                 for f in features:
-                    count += 1
                     timeValue = f.attributes()[tkptExtractedTimeIndex]
                     values.append(timeValue)
                 timeInterval = values[1].toTime_t() - values[0].toTime_t()
+                totalFlightTime = rowCount * timeInterval
                 feedback.setProgressText(f'{timeInterval}')
-                feedback.setProgressText(f'{count}')
+                feedback.setProgressText(f'The total flight time of {gpxFormattedName} is {totalFlightTime} seconds')
 
 
-            else:
-
-                continue
             # ===========================================================================
             # Add the Name field from tracks layer to track points layer
             # ===========================================================================
@@ -636,14 +641,33 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                             'DATASOURCE_OPTIONS': '',
                                             'LAYER_OPTIONS': ''})['OUTPUT']
 
-            gpxTemp = processing.run("native:fieldcalculator",
+
+            gpxField_name_new = processing.run("native:fieldcalculator",
                                    {'FIELD_LENGTH': 100,
-                                    'FIELD_NAME': 'name_new',
+                                    'FIELD_NAME': 'NameTkline',
                                     'NEW_FIELD': True,
                                     'FIELD_PRECISION': 0,
                                     'FIELD_TYPE': 2,
                                     'FORMULA':  f"'{tkLyrName}'",
                                     'INPUT': gpxTemp_saved,
+                                    'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+            gpxField_flightName = processing.run("native:fieldcalculator",
+                                   {'FIELD_LENGTH': 100,
+                                    'FIELD_NAME': 'FlightName',
+                                    'NEW_FIELD': True,
+                                    'FIELD_PRECISION': 0,
+                                    'FIELD_TYPE': 2,
+                                    'FORMULA':  f"'{gpxFormattedName}'",
+                                    'INPUT': gpxField_name_new,
+                                    'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+            gpxTemp = processing.run("native:fieldcalculator",
+                                   {'FIELD_LENGTH': 100,
+                                    'FIELD_NAME': 'TotalTime',
+                                    'NEW_FIELD': True,
+                                    'FIELD_PRECISION': 2,
+                                    'FIELD_TYPE': 0,
+                                    'FORMULA':  f"'{totalFlightTime}'",
+                                    'INPUT': gpxField_flightName,
                                     'OUTPUT': gpxTempPath}, context=context, feedback=feedback)['OUTPUT']
 
             gpxTemps.append(gpxTemp)
@@ -683,7 +707,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
 
-        return
+        return {'mergeGPX': gpxMerged}
 
     def name(self):
         """
