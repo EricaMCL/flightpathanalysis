@@ -104,7 +104,7 @@ class createUWRBuffer(QgsProcessingAlgorithm):
             self.unit_id, self.tr('Input unit id field, column has text like u-2-002'), 'unit_id', self.origUWR))
 
         self.addParameter(QgsProcessingParameterField(
-            self.unit_id_no, self.tr('Input unit id field, column has text like Mg-059'), 'unit_id', self.origUWR))
+            self.unit_id_no, self.tr('Input unit id number field, column has text like Mg-059'), 'unit_id', self.origUWR))
         # ===========================================================================
         # bufferDistIS_high/moderate/low - Input string, with default value 500/1000/1500
         # three buffer range represents different incursion severity range
@@ -173,6 +173,14 @@ class createUWRBuffer(QgsProcessingAlgorithm):
                 feedback.setProgressText('Geometry fixed')
                 origUWR = fixGeom['OUTPUT']
 
+            else:
+                fixGeom = processing.run("native:fixgeometries",
+                                         {'INPUT': parameters['origUWR'],
+                                          'OUTPUT': 'TEMPORARY_OUTPUT'})
+                feedback.setProgressText('Geometry fixed')
+                origUWR = fixGeom['OUTPUT']
+
+
             # ==============================================================
             # Get list of relevant UWR
             # ==============================================================
@@ -184,7 +192,10 @@ class createUWRBuffer(QgsProcessingAlgorithm):
             for feature in origUWR.getFeatures():
                 uwr_unique_Field_value = f'{feature.attributes()[unit_no_index]}__{feature.attributes()[unit_no_id_index]}'
                 uwrSet.add(uwr_unique_Field_value)
+                feedback.setProgressText(f'{uwr_unique_Field_value} added and updated')
+
             feedback.setProgressText(f'{uwr_unique_Field} added and updated')
+            feedback.setProgressText(f'{uwrSet} added and updated')
 
             # ==============================================================
             # Check existence of uwrBuffered in project folder
@@ -259,7 +270,7 @@ class createUWRBuffer(QgsProcessingAlgorithm):
                 # ==============================================================
                 dissolvedOrigPath = os.path.join(projectFolder, 'dissolve')
                 dissolvedOrig = processing.run("native:dissolve",
-                                               {'FIELD': ['UWR_TAG', 'UNIT_NO'],
+                                               {'FIELD': [unit_no, unit_no_id],
                                                 'INPUT': requireUWRLayer,
                                                 'OUTPUT': 'TEMPORARY_OUTPUT',
                                                 'SEPARATE_DISJOINT': False})['OUTPUT']
@@ -605,7 +616,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
             elif int(rowCount) == 2:
                 half = round(int(rowCount) / 2)
                 sel = (half - 1, half)
-                query = "OBJECTID in (1,2)"
+                query = "OBJECTID in (0,1)"
             else:
                 checkFilesList.append(gpxFile)
                 continue
