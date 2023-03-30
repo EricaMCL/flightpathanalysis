@@ -739,17 +739,63 @@ class flightPathConvert(QgsProcessingAlgorithm):
         # ===========================================================================
         unprojectedGPX = []
         for interval in timeIntervalDict:
-            gpxAllUnprojected = os.path.join(projectFolder, interval + '_All_unprojected')
+            gpxAllUnprojectedPath = os.path.join(projectFolder, interval + '_All_unprojected')
             gpxMergeUnprojected = processing.run("native:mergevectorlayers",
                                     {'LAYERS': timeIntervalDict[interval][1],
                                      'CRS': None,
-                                     'OUTPUT': gpxAllUnprojected})['OUTPUT']
-            rowCount = processing.run("qgis:basicstatisticsforfields",
-                                  {'INPUT_LAYER': gpxAllUnprojected,
-                                   'FIELD_NAME': 'time',
-                                   'OUTPUT_HTML_FILE': 'TEMPORARY_OUTPUT'})['COUNT']
+                                     'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
-        feedback.setProgressText(f'{rowCount}')
+            feedback.setProgressText(f'Merged all gpx file for {interval}')
+
+            # ===========================================================================
+            # Extract the elevation values to points, default field name: projectdemC
+            # ===========================================================================
+            DEMElev = processing.run("saga:addrastervaluestopoints",
+                           {'SHAPES': gpxMergeUnprojected,
+                            'GRIDS': ['C:/LWRSProject_QGIS/origDEM/origDEM/project_dem_Clip.tif'],
+                            'RESULT': 'TEMPORARY_OUTPUT',
+                            'RESAMPLING': 3})['OUTPUT']
+            feedback.setProgressText(f'DEM extract value to point')
+
+            AGL = processing.run("native:fieldcalculator",
+                                        {'INPUT':DEMElev,
+                                         'FIELD_NAME':'AGL',
+                                         'FIELD_TYPE':1,
+                                         'FIELD_LENGTH':100,
+                                         'FIELD_PRECISION':0,
+                                         'FORMULA':' "ele" - "projectdemC" ',
+                                         'OUTPUT':gpxAllUnprojectedPath})['OUTPUT']
+            # ===========================================================================
+            # Create layer with only points less than 500m
+            # ===========================================================================
+            pointLessthan500m_Unprojected = 'PointLessthan500m_Unprojected' + interval
+            pointLessthan500mExtracted = processing.run("native:extractbyexpression",
+                                              {'EXPRESSION': '"AGL" < 500',
+                                               'INPUT': AGL,
+                                               'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+            rowCount = processing.run("qgis:basicstatisticsforfields",
+                                      {'INPUT_LAYER': pointLessthan500mExtracted,
+                                       'FIELD_NAME': 'time',
+                                       'OUTPUT_HTML_FILE': 'TEMPORARY_OUTPUT'})['COUNT']
+            feedback.setProgressText(f'point less than 500, row count: {rowCount}')
+            if rowCount == 0:
+                feedback.setProgressText(f'point less than 500m layer table is empty')
+                continue
+
+            timeIntervalField = processing.run("native:fieldcalculator",
+                                        {'INPUT':pointLessthan500mExtracted,
+                                         'FIELD_NAME':'TimeInterval',
+                                         'FIELD_TYPE':0,
+                                         'FIELD_LENGTH':100,
+                                         'FIELD_PRECISION':0,
+                                         'FORMULA':f"'{timeIntervalDict[interval][0]}'",
+                                         'OUTPUT':pointLessthan500m_Unprojected})['OUTPUT']
+            feedback.setProgressText(f'TimeInterval field added')
+            unprojectedGPX.append(pointLessthan500m_Unprojected)
+            feedback.setProgressText(f'Unprojected layer:{pointLessthan500m_Unprojected} appended')
+
+
+
 
 
 
@@ -773,7 +819,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
 
-        return {'mergeGPX': gpxMerged}
+        return {'mergeGPX': gpxMergeUnprojected}
 
     def name(self):
         """
