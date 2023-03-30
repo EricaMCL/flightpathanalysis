@@ -192,7 +192,7 @@ class createUWRBuffer(QgsProcessingAlgorithm):
             for feature in origUWR.getFeatures():
                 uwr_unique_Field_value = f'{feature.attributes()[unit_no_index]}__{feature.attributes()[unit_no_id_index]}'
                 uwrSet.add(uwr_unique_Field_value)
-                feedback.setProgressText(f'{uwr_unique_Field_value} added and updated')
+                #feedback.setProgressText(f'{uwr_unique_Field_value} added and updated')
 
             feedback.setProgressText(f'{uwr_unique_Field} added and updated')
             feedback.setProgressText(f'{uwrSet} added and updated')
@@ -539,7 +539,11 @@ class flightPathConvert(QgsProcessingAlgorithm):
         uwrBufferedPath = parameters['uwrBuffered']
         gpxFolder = parameters['gpxFolder']
         DEM = self.parameterAsSource(parameters, self.DEM,context)
-        IncursionSeverity = {0: "In UWR", 500: "High", 1000: "Moderate", 1500: "Low"}
+
+        # ==============================================================
+        # incursionSeverity will be created using the user input from create buffer step
+        # ==============================================================
+        incursionSeverity = {0: "In UWR", 500: "High", 1000: "Moderate", 1500: "Low"}
         feedback.setProgressText(str(uwrBuffered))
 
         # ==============================================================
@@ -631,6 +635,9 @@ class flightPathConvert(QgsProcessingAlgorithm):
                 feedback.setProgressText(f'{tkptExtractedTimeIndex}')
                 features = tkptLyr.getFeatures()
                 values = []
+                # ==============================================================
+                # Calculate the time interval and the totalFlightTime
+                # ==============================================================
                 for f in features:
                     timeValue = f.attributes()[tkptExtractedTimeIndex]
                     values.append(timeValue)
@@ -652,7 +659,6 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                             'DATASOURCE_OPTIONS': '',
                                             'LAYER_OPTIONS': ''})['OUTPUT']
 
-
             gpxField_name_new = processing.run("native:fieldcalculator",
                                    {'FIELD_LENGTH': 100,
                                     'FIELD_NAME': 'NameTkline',
@@ -662,6 +668,9 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                     'FORMULA':  f"'{tkLyrName}'",
                                     'INPUT': gpxTemp_saved,
                                     'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+            # ===========================================================================
+            # Add the flightName field
+            # ===========================================================================
             gpxField_flightName = processing.run("native:fieldcalculator",
                                    {'FIELD_LENGTH': 100,
                                     'FIELD_NAME': 'FlightName',
@@ -671,6 +680,10 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                     'FORMULA':  f"'{gpxFormattedName}'",
                                     'INPUT': gpxField_name_new,
                                     'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+
+            # ===========================================================================
+            # Add the TotalTime field
+            # ===========================================================================
             gpxTemp = processing.run("native:fieldcalculator",
                                    {'FIELD_LENGTH': 100,
                                     'FIELD_NAME': 'TotalTime',
@@ -684,16 +697,58 @@ class flightPathConvert(QgsProcessingAlgorithm):
             gpxTemps.append(gpxTemp)
             feedback.setProgressText(f'{gpxTemps}')
 
+            # ===========================================================================
+            # Create flight line
+            # ===========================================================================
+            flightline = processing.run("native:pointstopath",
+                                        {'INPUT':gpxTemp,
+                                         'CLOSE_PATH':False,
+                                         'ORDER_EXPRESSION':'',
+                                         'NATURAL_SORT':False,
+                                         'GROUP_EXPRESSION':'',
+                                         'OUTPUT':'TEMPORARY_OUTPUT'})
+            flightLines.append(flightline)
+            feedback.setProgressText(f'Flight Line: {flightline} appended')
 
-        mergedGPX = os.path.join(projectFolder, 'mergedGPX')
-        gpxMerged = processing.run("native:mergevectorlayers",
-                                    {'LAYERS': gpxTemps,
+            # ===========================================================================
+            # Get season time sum
+            # ===========================================================================
+            totalSeasonTime += totalFlightTime
+            timeIntervalStr = "T" + replaceNonAlphaNum(str(timeInterval), "_")
+            if timeIntervalStr not in timeIntervalDict:
+                timeIntervalDict[timeIntervalStr] = [timeInterval, [gpxTemp]]
+            else:
+                timeIntervalDict[timeIntervalStr][1].append(gpxTemp)
+
+        # ===========================================================================
+        # Output the problem text to the gpx folder
+        # ===========================================================================
+        if len(checkFilesList) > 0:
+            problemGPXText = open(os.path.join(projectFolder, 'problemGPXFiles.txt'), "w")
+            for i in checkFilesList:
+                problemGPXText.write(i + "\n")
+            problemGPXText.close()
+
+        feedback.setProgressText(f'Total season time : {totalSeasonTime}')
+        feedback.setProgressText(f'Total flight line {count}')
+        feedback.setProgressText(f'Number of different time interval {len(timeIntervalDict)}')
+        feedback.setProgressText(f'{timeIntervalDict}')
+
+        # ===========================================================================
+        # Unprojected
+        # ===========================================================================
+        unprojectedGPX = []
+        for interval in timeIntervalDict:
+            gpxAllUnprojected = os.path.join(projectFolder, interval + '_All_unprojected')
+            gpxMergeUnprojected = processing.run("native:mergevectorlayers",
+                                    {'LAYERS': timeIntervalDict[interval][1],
                                      'CRS': None,
-                                     'OUTPUT': mergedGPX})['OUTPUT']
-        rowCount = processing.run("qgis:basicstatisticsforfields",
-                                  {'INPUT_LAYER': gpxMerged,
+                                     'OUTPUT': gpxAllUnprojected})['OUTPUT']
+            rowCount = processing.run("qgis:basicstatisticsforfields",
+                                  {'INPUT_LAYER': gpxAllUnprojected,
                                    'FIELD_NAME': 'time',
                                    'OUTPUT_HTML_FILE': 'TEMPORARY_OUTPUT'})['COUNT']
+
         feedback.setProgressText(f'{rowCount}')
 
 
