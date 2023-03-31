@@ -45,7 +45,8 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterMultipleLayers,
                        QgsField,
                        QgsFeature,
-                       QgsVectorLayer)
+                       QgsVectorLayer,
+                       QgsCoordinateReferenceSystem)
 import glob
 import os
 import processing
@@ -802,10 +803,24 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                 'OUTPUT': os.path.join(projectFolder, 'pointLessthan500m_Unprojected_Final')})['OUTPUT']
         feedback.setProgressText(f'{gpxMergeUnprojected_500m} created')
 
+        pointLessthan500m_Projected = processing.run("native:reprojectlayer",
+                       {'INPUT': gpxMergeUnprojected_500m,
+                        'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:3005'), 'OPERATION': '+proj=noop',
+                        'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+
         gpxMergeFlightLines = processing.run("native:mergevectorlayers",
                                 {'LAYERS': flightLines,
                                 'CRS': None,
                                 'OUTPUT': os.path.join(projectFolder, 'allFlightLinesUnprojected')})['OUTPUT']
+
+        heightRangeField = processing.run("native:fieldcalculator",
+                             {'INPUT': pointLessthan500m_Projected,
+                              'FIELD_NAME': 'HeightRange',
+                              'FIELD_TYPE': 2,
+                              'FIELD_LENGTH': 100,
+                              'FIELD_PRECISION': 0,
+                              'FORMULA': '',
+                              'OUTPUT': gpxAllUnprojectedPath})['OUTPUT']
 
 
 
