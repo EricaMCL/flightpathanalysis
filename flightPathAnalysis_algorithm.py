@@ -785,6 +785,9 @@ class flightPathConvert(QgsProcessingAlgorithm):
                 feedback.setProgressText(f'point less than 500m layer table is empty')
                 continue
 
+            # ===========================================================================
+            # Add time interval field
+            # ===========================================================================
             timeIntervalField = processing.run("native:fieldcalculator",
                                         {'INPUT':pointLessthan500mExtracted,
                                          'FIELD_NAME':'TimeInterval',
@@ -797,30 +800,57 @@ class flightPathConvert(QgsProcessingAlgorithm):
             unprojectedGPX.append(timeIntervalField + f'|layername=PointLessthan500m_Unprojected{interval}')
             feedback.setProgressText(f'Unprojected layer:{timeIntervalField} appended')
         feedback.setProgressText(f'{unprojectedGPX}')
+
+        # ===========================================================================
+        # Merge all unprojectedGPS layers that includes points below 500m
+        # ===========================================================================
         gpxMergeUnprojected_500m = processing.run("native:mergevectorlayers",
                                 {'LAYERS': unprojectedGPX,
                                 'CRS': None,
                                 'OUTPUT': os.path.join(projectFolder, 'pointLessthan500m_Unprojected_Final')})['OUTPUT']
         feedback.setProgressText(f'{gpxMergeUnprojected_500m} created')
 
+        # ===========================================================================
+        # Reproject the result to ESPG 3005
+        # ===========================================================================
         pointLessthan500m_Projected = processing.run("native:reprojectlayer",
                        {'INPUT': gpxMergeUnprojected_500m,
                         'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:3005'), 'OPERATION': '+proj=noop',
                         'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
+        # ===========================================================================
+        # Merge all the flight lines
+        # ===========================================================================
         gpxMergeFlightLines = processing.run("native:mergevectorlayers",
                                 {'LAYERS': flightLines,
                                 'CRS': None,
                                 'OUTPUT': os.path.join(projectFolder, 'allFlightLinesUnprojected')})['OUTPUT']
 
+        # ===========================================================================
+        # Add and calculate Height Range field to pointLessthan500m_Projected
+        # ===========================================================================
         heightRangeField = processing.run("native:fieldcalculator",
                              {'INPUT': pointLessthan500m_Projected,
                               'FIELD_NAME': 'HeightRange',
                               'FIELD_TYPE': 2,
                               'FIELD_LENGTH': 100,
                               'FIELD_PRECISION': 0,
-                              'FORMULA': '',
-                              'OUTPUT': gpxAllUnprojectedPath})['OUTPUT']
+                              'FORMULA': 'case\nwhen "AGL" < 400 then \'0 to 400m\'\nelse \'400 to 500m\'\nend ',
+                              'OUTPUT': os.path.join(projectFolder, 'pointLessthan500m_Projected')})['OUTPUT']
+
+        feedback.setProgressText(f'Height Range field calculated')
+
+        # ===========================================================================
+        # Refactor the required fields from uwrbuffered layer that created previously
+        # ===========================================================================
+
+        uwr_fieldMapping = processing.run("native:refactorfields", {
+            'INPUT': uwrBuffered,
+            'FIELDS_MAPPING': [
+                {'expression': f"{unit_no}"},
+                {'expression': f"{unit_no_id}"},
+                {'expression': '"BUFF_DIST"'},
+                {'expression': '"TUWR_TAG"'}], 'OUTPUT': os.path.join(projectFolder, 'fieldmappingTest')})
 
 
 
