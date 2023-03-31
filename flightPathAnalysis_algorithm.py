@@ -813,10 +813,18 @@ class flightPathConvert(QgsProcessingAlgorithm):
         # ===========================================================================
         # Reproject the result to ESPG 3005
         # ===========================================================================
-        pointLessthan500m_Projected = processing.run("native:reprojectlayer",
-                       {'INPUT': gpxMergeUnprojected_500m,
-                        'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:3005'), 'OPERATION': '+proj=noop',
-                        'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+        pointLessthan500m_Projected = processing.run("grass7:v.proj",
+                                                     {'input':gpxMergeUnprojected_500m,
+                                                     'crs':QgsCoordinateReferenceSystem('EPSG:3005'),
+                                                      'smax':10000,'-z':False,'-w':False,
+                                                      'output':'TEMPORARY_OUTPUT',
+                                                      'GRASS_REGION_PARAMETER':None,
+                                                      'GRASS_SNAP_TOLERANCE_PARAMETER':-1,
+                                                      'GRASS_MIN_AREA_PARAMETER':0.0001,
+                                                      'GRASS_OUTPUT_TYPE_PARAMETER':0,
+                                                      'GRASS_VECTOR_DSCO':'',
+                                                      'GRASS_VECTOR_LCO':'',
+                                                      'GRASS_VECTOR_EXPORT_NOCAT':False})['output']
 
         # ===========================================================================
         # Merge all the flight lines
