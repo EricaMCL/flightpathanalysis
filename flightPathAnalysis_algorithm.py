@@ -862,13 +862,13 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                            'OUTPUT':os.path.join(projectFolder, 'fieldMappingTEST')})['OUTPUT']
 
 
-        join = processing.run("native:joinattributesbylocation",
+        uwrFlightPoints_Join = processing.run("native:joinattributesbylocation",
                               {'INPUT':heightRangeField,
                                'PREDICATE':[0],
                                'JOIN':uwr_fieldMapping,
                                'JOIN_FIELDS':[],
                                'METHOD':0,
-                               'DISCARD_NONMATCHING':False,
+                               'DISCARD_NONMATCHING':True,
                                'PREFIX':'',
                                'OUTPUT':os.path.join(projectFolder, 'pointLessthan500m_Projected_JOIN')})
 
