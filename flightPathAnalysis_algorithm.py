@@ -543,8 +543,14 @@ class flightPathConvert(QgsProcessingAlgorithm):
 
         # ==============================================================
         # incursionSeverity will be created using the user input from create buffer step
+        # the following parts will be replaced by user input when combined steps
         # ==============================================================
-        incursionSeverity = {0: "In UWR", 500: "High", 1000: "Moderate", 1500: "Low"}
+        inUWR_IS = 0
+        high_IS = 500
+        moderate_IS = 1000
+        low_IS = 1500
+
+        incursionSeverity = {inUWR_IS: "In UWR", high_IS: "High", moderate_IS: "Moderate", low_IS: "Low"}
         feedback.setProgressText(str(uwrBuffered))
 
         # ==============================================================
@@ -855,14 +861,16 @@ class flightPathConvert(QgsProcessingAlgorithm):
         uwr_fieldMapping = processing.run("native:refactorfields",
                                           {'INPUT':uwrBufferedPath,
                                            'FIELDS_MAPPING':[
-                                               {'expression': '"UWR_TAG"','length': 14,'name': 'UWR_NUMBER','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                               {'expression': '"UNIT_NO"','length': 14,'name': 'UWR_UNIT_N','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                               {'expression': f"{unit_no}",'length': 14,'name': 'UWR_NUMBER','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                               {'expression': f"{unit_no_id}",'length': 14,'name': 'UWR_UNIT_N','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                {'expression': '"uwr_unique_id"','length': 100,'name': 'uwr_unique_id','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                {'expression': '"BUFF_DIST"','length': 0,'name': 'BUFF_DIST','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'}],
                                            'OUTPUT':os.path.join(projectFolder, 'fieldMappingTEST')})['OUTPUT']
 
-
-        uwrFlightPoints_Join = processing.run("native:joinattributesbylocation",
+        # ===========================================================================
+        # Spatial join the pointLessthan500m and the selected uwebuffered field
+        # ===========================================================================
+        pointLessthan500m_uwrbuffer = processing.run("native:joinattributesbylocation",
                               {'INPUT':heightRangeField,
                                'PREDICATE':[0],
                                'JOIN':uwr_fieldMapping,
@@ -870,8 +878,35 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                'METHOD':0,
                                'DISCARD_NONMATCHING':True,
                                'PREFIX':'',
-                               'OUTPUT':os.path.join(projectFolder, 'pointLessthan500m_Projected_JOIN')})
+                               'OUTPUT':os.path.join(projectFolder, 'Point_lessthan500Height_uwrbuffer')})['OUTPUT']
 
+        # ==============================================================
+        # If table is empty, ie, no point within uwr buffer zones, no need to get a table
+        # ==============================================================
+        rowCount = processing.run("qgis:basicstatisticsforfields",
+                                      {'INPUT_LAYER': pointLessthan500m_uwrbuffer + '|layer=Point_lessthan500Height_uwrbuffer',
+                                       'FIELD_NAME': 'time',
+                                       'OUTPUT_HTML_FILE': 'TEMPORARY_OUTPUT'})['COUNT']
+        if int(rowCount[0]) == 0:
+            raise SystemExit("No flight lines intersect with uwr buffers")
+
+        # ==============================================================
+        # Add incurring severity according to buffer range
+        # ==============================================================
+         incursionSeverityField = processing.run("native:fieldcalculator",
+                             {'INPUT': pointLessthan500m_uwrbuffer,
+                              'FIELD_NAME': 'IncursionSeverity',
+                              'FIELD_TYPE': 2,
+                              'FIELD_LENGTH': 100,
+                              'FIELD_PRECISION': 0,
+                              'FORMULA': 'case\r\nwhen "BUFF_DIST"' + f"= {inUWR_IS} then {incursionSeverity[inUWR_IS]}"
+                                         + '\r\nwhen "BUFF_DIST"' + f"= {high_IS} then {incursionSeverity[high_IS]}"
+                                         + '\r\nwhen "BUFF_DIST"' + f"= {moderate_IS} then {incursionSeverity[moderate_IS]}"
+                                         + '\r\nwhen "BUFF_DIST"' + f"= {low_IS} then {incursionSeverity[low_IS]}"
+                                         + '\r\nend',
+                              'OUTPUT': os.path.join(projectFolder, 'pointLessthan500m_Projected_IS')})['OUTPUT']
+
+        #incursionSeverity = {0: "In UWR", 500: "High", 1000: "Moderate", 1500: "Low"}
 
 
 
