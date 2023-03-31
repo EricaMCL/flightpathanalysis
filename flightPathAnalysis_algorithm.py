@@ -538,7 +538,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
         uwrBuffered = self.parameterAsSource(parameters, self.uwrBuffered, context)
         uwrBufferedPath = parameters['uwrBuffered']
         gpxFolder = parameters['gpxFolder']
-        DEM = self.parameterAsSource(parameters, self.DEM,context)
+        DEM = parameters['DEM']
 
         # ==============================================================
         # incursionSeverity will be created using the user input from create buffer step
@@ -700,14 +700,16 @@ class flightPathConvert(QgsProcessingAlgorithm):
             # ===========================================================================
             # Create flight line
             # ===========================================================================
+            flightLineName = gpxFormattedName + '__flightLine'
+            flightLinePath = os.path.join(projectFolder, flightLineName)
             flightline = processing.run("native:pointstopath",
                                         {'INPUT':gpxTemp,
                                          'CLOSE_PATH':False,
                                          'ORDER_EXPRESSION':'',
                                          'NATURAL_SORT':False,
                                          'GROUP_EXPRESSION':'',
-                                         'OUTPUT':'TEMPORARY_OUTPUT'})
-            flightLines.append(flightline)
+                                         'OUTPUT':flightLinePath})['OUTPUT']
+            flightLines.append(flightline + f'|layername={flightLineName}')
             feedback.setProgressText(f'Flight Line: {flightline} appended')
 
             # ===========================================================================
@@ -743,7 +745,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
             gpxMergeUnprojected = processing.run("native:mergevectorlayers",
                                     {'LAYERS': timeIntervalDict[interval][1],
                                      'CRS': None,
-                                     'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+                                     'OUTPUT': os.path.join(projectFolder, 'intervalmerge')})['OUTPUT']
 
             feedback.setProgressText(f'Merged all gpx file for {interval}')
 
@@ -752,9 +754,9 @@ class flightPathConvert(QgsProcessingAlgorithm):
             # ===========================================================================
             DEMElev = processing.run("saga:addrastervaluestopoints",
                            {'SHAPES': gpxMergeUnprojected,
-                            'GRIDS': ['C:/LWRSProject_QGIS/origDEM/origDEM/project_dem_Clip.tif'],
+                            'GRIDS': [DEM],
                             'RESULT': 'TEMPORARY_OUTPUT',
-                            'RESAMPLING': 3})['OUTPUT']
+                            'RESAMPLING': 3})['RESULT']
             feedback.setProgressText(f'DEM extract value to point')
 
             AGL = processing.run("native:fieldcalculator",
@@ -763,12 +765,12 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                          'FIELD_TYPE':1,
                                          'FIELD_LENGTH':100,
                                          'FIELD_PRECISION':0,
-                                         'FORMULA':' "ele" - "projectdemC" ',
+                                         'FORMULA':'case\r\nwhen "ele" - "projectdemC" <0 then 0 \r\nelse "ele" - "projectdemC"\r\nend\r\n\r\n',
                                          'OUTPUT':gpxAllUnprojectedPath})['OUTPUT']
             # ===========================================================================
             # Create layer with only points less than 500m
             # ===========================================================================
-            pointLessthan500m_Unprojected = 'PointLessthan500m_Unprojected' + interval
+            pointLessthan500m_UnprojectedPath = os.path.join(projectFolder,'PointLessthan500m_Unprojected' + interval)
             pointLessthan500mExtracted = processing.run("native:extractbyexpression",
                                               {'EXPRESSION': '"AGL" < 500',
                                                'INPUT': AGL,
@@ -789,10 +791,22 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                          'FIELD_LENGTH':100,
                                          'FIELD_PRECISION':0,
                                          'FORMULA':f"'{timeIntervalDict[interval][0]}'",
-                                         'OUTPUT':pointLessthan500m_Unprojected})['OUTPUT']
+                                         'OUTPUT':pointLessthan500m_UnprojectedPath})['OUTPUT']
             feedback.setProgressText(f'TimeInterval field added')
-            unprojectedGPX.append(pointLessthan500m_Unprojected)
-            feedback.setProgressText(f'Unprojected layer:{pointLessthan500m_Unprojected} appended')
+            unprojectedGPX.append(timeIntervalField + f'|layername=PointLessthan500m_Unprojected{interval}')
+            feedback.setProgressText(f'Unprojected layer:{timeIntervalField} appended')
+        feedback.setProgressText(f'{unprojectedGPX}')
+        gpxMergeUnprojected_500m = processing.run("native:mergevectorlayers",
+                                {'LAYERS': unprojectedGPX,
+                                'CRS': None,
+                                'OUTPUT': os.path.join(projectFolder, 'pointLessthan500m_Unprojected_Final')})['OUTPUT']
+        feedback.setProgressText(f'{gpxMergeUnprojected_500m} created')
+
+        gpxMergeFlightLines = processing.run("native:mergevectorlayers",
+                                {'LAYERS': flightLines,
+                                'CRS': None,
+                                'OUTPUT': os.path.join(projectFolder, 'allFlightLinesUnprojected')})['OUTPUT']
+
 
 
 
@@ -819,7 +833,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
 
-        return {'mergeGPX': gpxMergeUnprojected}
+        return {'mergeGPX': pointLessthan500m_UnprojectedPath}
 
     def name(self):
         """
