@@ -855,14 +855,22 @@ class flightPathConvert(QgsProcessingAlgorithm):
         uwr_fieldMapping = processing.run("native:refactorfields",
                                           {'INPUT':uwrBufferedPath,
                                            'FIELDS_MAPPING':[
-                                               {'expression': '"UWR_NUMBER"','length': 14,'name': 'UWR_NUMBER','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                               {'expression': '"UWR_UNIT_N"','length': 14,'name': 'UWR_UNIT_N','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                               {'expression': '"UWR_TAG"','length': 14,'name': 'UWR_NUMBER','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                               {'expression': '"UNIT_NO"','length': 14,'name': 'UWR_UNIT_N','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                {'expression': '"uwr_unique_id"','length': 100,'name': 'uwr_unique_id','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                {'expression': '"BUFF_DIST"','length': 0,'name': 'BUFF_DIST','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'}],
-                                           'OUTPUT':os.path.join(projectFolder, 'fieldMappingTEST')})
+                                           'OUTPUT':os.path.join(projectFolder, 'fieldMappingTEST')})['OUTPUT']
 
 
-
+        join = processing.run("native:joinattributesbylocation",
+                              {'INPUT':heightRangeField,
+                               'PREDICATE':[0],
+                               'JOIN':uwr_fieldMapping,
+                               'JOIN_FIELDS':[],
+                               'METHOD':0,
+                               'DISCARD_NONMATCHING':False,
+                               'PREFIX':'',
+                               'OUTPUT':os.path.join(projectFolder, 'pointLessthan500m_Projected_JOIN')})
 
 
 
