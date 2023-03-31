@@ -844,13 +844,14 @@ class flightPathConvert(QgsProcessingAlgorithm):
         # Refactor the required fields from uwrbuffered layer that created previously
         # ===========================================================================
 
-        uwr_fieldMapping = processing.run("native:refactorfields", {
-            'INPUT': uwrBuffered,
-            'FIELDS_MAPPING': [
-                {'expression': f"{unit_no}"},
-                {'expression': f"{unit_no_id}"},
-                {'expression': '"BUFF_DIST"'},
-                {'expression': '"TUWR_TAG"'}], 'OUTPUT': os.path.join(projectFolder, 'fieldmappingTest')})
+        uwr_fieldMapping = processing.run("native:refactorfields",
+                                          {'INPUT':uwrBufferedPath,
+                                           'FIELDS_MAPPING':[
+                                               {'expression': '"UWR_NUMBER"','length': 14,'name': 'UWR_NUMBER','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                               {'expression': '"UWR_UNIT_N"','length': 14,'name': 'UWR_UNIT_N','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                               {'expression': '"uwr_unique_id"','length': 100,'name': 'uwr_unique_id','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                               {'expression': '"BUFF_DIST"','length': 0,'name': 'BUFF_DIST','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'}],
+                                           'OUTPUT':os.path.join(projectFolder, 'fieldMappingTEST')})
 
 
 
