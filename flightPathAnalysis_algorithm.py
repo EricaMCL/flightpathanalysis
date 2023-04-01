@@ -884,29 +884,44 @@ class flightPathConvert(QgsProcessingAlgorithm):
         # If table is empty, ie, no point within uwr buffer zones, no need to get a table
         # ==============================================================
         rowCount = processing.run("qgis:basicstatisticsforfields",
-                                      {'INPUT_LAYER': pointLessthan500m_uwrbuffer + '|layer=Point_lessthan500Height_uwrbuffer',
+                                      {'INPUT_LAYER': pointLessthan500m_uwrbuffer + '|layername=Point_lessthan500Height_uwrbuffer',
                                        'FIELD_NAME': 'time',
                                        'OUTPUT_HTML_FILE': 'TEMPORARY_OUTPUT'})['COUNT']
-        if int(rowCount[0]) == 0:
+        if int(rowCount) == 0:
             raise SystemExit("No flight lines intersect with uwr buffers")
 
         # ==============================================================
         # Add incurring severity according to buffer range
         # ==============================================================
-         incursionSeverityField = processing.run("native:fieldcalculator",
+        incursionSeverityField = processing.run("native:fieldcalculator",
                              {'INPUT': pointLessthan500m_uwrbuffer,
                               'FIELD_NAME': 'IncursionSeverity',
                               'FIELD_TYPE': 2,
                               'FIELD_LENGTH': 100,
                               'FIELD_PRECISION': 0,
-                              'FORMULA': 'case\r\nwhen "BUFF_DIST"' + f"= {inUWR_IS} then {incursionSeverity[inUWR_IS]}"
-                                         + '\r\nwhen "BUFF_DIST"' + f"= {high_IS} then {incursionSeverity[high_IS]}"
-                                         + '\r\nwhen "BUFF_DIST"' + f"= {moderate_IS} then {incursionSeverity[moderate_IS]}"
-                                         + '\r\nwhen "BUFF_DIST"' + f"= {low_IS} then {incursionSeverity[low_IS]}"
-                                         + '\r\nend',
-                              'OUTPUT': os.path.join(projectFolder, 'pointLessthan500m_Projected_IS')})['OUTPUT']
+                              'FORMULA': 'case\r\nwhen "BUFF_DIST"'
+                                         + f"= {inUWR_IS} then \'In UWR\'\r\n"
+                                         + 'when "BUFF_DIST" '
+                                         + f"={high_IS} then \'High\'\r\n"
+                                         + 'when "BUFF_DIST" '
+                                         + f"= {moderate_IS} then \'Moderate\'\r\n"
+                                         + 'when "BUFF_DIST"'
+                                         + f"= {low_IS} then \'Low\'\r\nend",
+                              'OUTPUT': os.path.join(projectFolder, 'allFlightPoints')})['OUTPUT']
 
-        #incursionSeverity = {0: "In UWR", 500: "High", 1000: "Moderate", 1500: "Low"}
+        # ==============================================================
+        # Split points of each incursion severity in different layers
+        # ==============================================================
+        for severity in incursionSeverity:
+            name = "Below500m_" + str(severity)
+            diffISlyr = processing.run("native:extractbyexpression",
+                                       {'EXPRESSION': "IncursionSeverity = '" + str(incursionSeverity[severity]) + "'",
+                                        'INPUT': incursionSeverityField,
+                                        'OUTPUT': os.path.join(projectFolder, name)})['OUTPUT']
+            feedback.setProgressText(f'{diffISlyr} created')
+
+
+
 
 
 
