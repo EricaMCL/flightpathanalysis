@@ -1008,3 +1008,127 @@ class flightPathConvert(QgsProcessingAlgorithm):
 
     def createInstance(self):
         return flightPathConvert()
+
+class calGeneralStats(QgsProcessingAlgorithm):
+    """
+    This is an example algorithm that takes a vector layer and
+    creates a new identical one.
+
+    It is meant to be used as an example of how to create your own
+    algorithms and explain methods and variables used to do it. An
+    algorithm like this will be available in all elements, and there
+    is not need for additional work.
+
+    All Processing algorithms should extend the QgsProcessingAlgorithm
+    class.
+    """
+
+    # Constants used to refer to parameters and outputs. They will be
+    # used when calling the algorithm from another algorithm, or when
+    # calling from the QGIS console.
+    projectFolder = 'projectFolder'
+    allFlightPoints = 'allFlightPoints'
+
+    def initAlgorithm(self, config):
+        """
+        Here we define the inputs and output of the algorithm, along
+        with some other properties.
+        """
+        # ===========================================================================
+        # Project Folder
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterFile(
+            self.projectFolder, self.tr('Project Folder'), QgsProcessingParameterFile.Folder))
+        # ===========================================================================
+        # uwrBuffered
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterFeatureSource(
+            self.allFlightPoints, self.tr('Input allFlightPoints'), [QgsProcessing.TypeVectorPoint]))
+
+
+
+    def processAlgorithm(self, parameters, context, feedback):
+        """
+        Here is where the processing itself takes place.
+        """
+        # Retrieve the feature source and sink. The 'dest_id' variable is used
+        # to uniquely identify the feature sink, and must be included in the
+        # dictionary returned by the processAlgorithm function.
+        projectFolder = parameters['projectFolder']
+        allFlightPoints = parameters['allFlightPoints']
+        try:
+            feedback.setProgressText('---Process completed successfully---')
+
+        except Exception:
+            feedback.setProgressText('Something is wrong')
+            feedback.setProgressText(f'{Exception}')
+
+        finally:
+            feedback.setProgressText('Completed')
+
+
+
+
+
+
+
+
+        total = 100.0 / allFlightPoints.featureCount() if allFlightPointsd.featureCount() else 0
+        features = allFlightPoints.getFeatures()
+
+        for current, feature in enumerate(features):
+            # Stop the algorithm if cancel button has been clicked
+            if feedback.isCanceled():
+                break
+
+            # Update the progress bar
+            feedback.setProgress(int(current * total))
+
+        # Return the results of the algorithm. In this case our only result is
+        # the feature sink which contains the processed features, but some
+        # algorithms may return multiple feature sinks, calculated numeric
+        # statistics, etc. These should all be included in the returned
+        # dictionary, with keys matching the feature corresponding parameter
+        # or output names.
+
+        return {'allFlightPoints': allFlightPoints}
+
+    def name(self):
+        """
+        Returns the algorithm name, used for identifying the algorithm. This
+        string should be fixed for the algorithm, and must not be localised.
+        The name should be unique within each provider. Names should contain
+        lowercase alphanumeric characters only and no spaces or other
+        formatting characters.
+        """
+        return 'Calculate General Stats'
+
+    def displayName(self):
+        """
+        Returns the translated algorithm name, which should be used for any
+        user-visible display of the algorithm name.
+        """
+        return self.tr(self.name())
+
+    def group(self):
+        """
+        Returns the name of the group this algorithm belongs to. This string
+        should be localised.
+        """
+        return self.tr(self.groupId())
+
+    def groupId(self):
+        """
+        Returns the unique ID of the group this algorithm belongs to. This
+        string should be fixed for the algorithm, and must not be localised.
+        The group id should be unique within each provider. Group id should
+        contain lowercase alphanumeric characters only and no spaces or other
+        formatting characters.
+        """
+        return '2023_Project'
+
+    def tr(self, string):
+        return QCoreApplication.translate('Processing', string)
+
+    def createInstance(self):
+        return calGeneralStats()
