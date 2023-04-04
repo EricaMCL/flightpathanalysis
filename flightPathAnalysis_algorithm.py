@@ -539,6 +539,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
         uwrBufferedPath = parameters['uwrBuffered']
         gpxFolder = parameters['gpxFolder']
         DEM = parameters['DEM']
+        delFolder = os.path.join(projectFolder, 'delFolder')
 
         # ==============================================================
         # incursionSeverity will be created using the user input from create buffer step
@@ -575,12 +576,24 @@ class flightPathConvert(QgsProcessingAlgorithm):
         checkFilesList = []
 
         # ===========================================================================
-        # Loop through the input GPX folder and get the row counts
+        # Loop through the input GPX folder
         # ===========================================================================
         gpxFiles = glob.glob(os.path.join(gpxFolder, "*.gpx"))
         gpxTemps = []
 
         try:
+            # ===========================================================================
+            # Check if the delFolder exists, and delete it if found
+            # ===========================================================================
+            if os.path.exists(delFolder):
+                shutil.rmtree(delFolder)
+                os.mkdir(delFolder)
+            else:
+                os.mkdir(delFolder)
+
+            # ===========================================================================
+            # Get the row count of each GPX file, and the required information from different layers
+            # ===========================================================================
             for gpxFile in gpxFiles:
                 flightCount += 1
                 feedback.setProgressText(f'{str(flightCount)}: {str(gpxFile)}')
@@ -635,10 +648,9 @@ class flightPathConvert(QgsProcessingAlgorithm):
                     tkptLyrExtracted = processing.run("native:extractbyexpression",
                                                     {'EXPRESSION': query,
                                                      'INPUT': tkptLyr_id,
-                                                     'OUTPUT': os.path.join(projectFolder, 'tkptExtracted' + str(flightCount))})['OUTPUT']
+                                                     'OUTPUT': os.path.join(delFolder, 'tkptExtracted' + str(flightCount))})['OUTPUT']
                     tkptLyr = QgsVectorLayer((tkptLyrExtracted), "", "ogr")
                     tkptExtractedTimeIndex = (tkptLyr.fields().names()).index('time')
-                    feedback.setProgressText(f'{tkptExtractedTimeIndex}')
                     features = tkptLyr.getFeatures()
                     values = []
                     # ==============================================================
@@ -649,14 +661,13 @@ class flightPathConvert(QgsProcessingAlgorithm):
                         values.append(timeValue)
                     timeInterval = values[1].toTime_t() - values[0].toTime_t()
                     totalFlightTime = rowCount * timeInterval
-                    feedback.setProgressText(f'{timeInterval}')
                     feedback.setProgressText(f'The total flight time of {gpxFormattedName} is {totalFlightTime} seconds')
 
 
                 # ===========================================================================
                 # Add the Name field from tracks layer to track points layer
                 # ===========================================================================
-                gpxTempPath = os.path.join(projectFolder, 'temp_' + gpxFormattedName)
+                gpxTempPath = os.path.join(delFolder, 'temp_' + gpxFormattedName)
                 feedback.setProgressText(f'{gpxTempPath}')
                 gpxTemp_saved = processing.run("native:savefeatures",
                                                {'INPUT': gpxFile + gpxDict['tkpt'],
@@ -687,6 +698,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                         'INPUT': gpxField_name_new,
                                         'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
+
                 # ===========================================================================
                 # Add the TotalTime field
                 # ===========================================================================
@@ -701,22 +713,31 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                         'OUTPUT': gpxTempPath}, context=context, feedback=feedback)['OUTPUT']
 
                 gpxTemps.append(gpxTemp)
-                feedback.setProgressText(f'{gpxTemps}')
 
                 # ===========================================================================
                 # Create flight line
                 # ===========================================================================
                 flightLineName = gpxFormattedName + '__flightLine'
-                flightLinePath = os.path.join(projectFolder, flightLineName)
+                flightLinePath = os.path.join(delFolder, flightLineName)
                 flightline = processing.run("native:pointstopath",
                                             {'INPUT':gpxTemp,
                                              'CLOSE_PATH':False,
                                              'ORDER_EXPRESSION':'',
                                              'NATURAL_SORT':False,
                                              'GROUP_EXPRESSION':'',
-                                             'OUTPUT':flightLinePath})['OUTPUT']
-                flightLines.append(flightline + f'|layername={flightLineName}')
-                feedback.setProgressText(f'Flight Line: {flightline} appended')
+                                             'OUTPUT':'TEMPORARY_OUTPUT'})['OUTPUT']
+
+                flightLineNameField = processing.run("native:fieldcalculator",
+                                       {'FIELD_LENGTH': 100,
+                                        'FIELD_NAME': 'Name',
+                                        'NEW_FIELD': True,
+                                        'FIELD_PRECISION': 0,
+                                        'FIELD_TYPE': 2,
+                                        'FORMULA':  f"'{tkLyrName}'",
+                                        'INPUT': flightline,
+                                        'OUTPUT': flightLinePath})['OUTPUT']
+                flightLines.append(flightLineNameField + f'|layername={flightLineName}')
+                feedback.setProgressText(f'Flight Line: {flightLineNameField} appended')
 
                 # ===========================================================================
                 # Get season time sum
@@ -727,6 +748,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
                     timeIntervalDict[timeIntervalStr] = [timeInterval, [gpxTemp]]
                 else:
                     timeIntervalDict[timeIntervalStr][1].append(gpxTemp)
+                feedback.setProgressText(f'===========================================')
 
 
 
@@ -749,11 +771,11 @@ class flightPathConvert(QgsProcessingAlgorithm):
             # ===========================================================================
             unprojectedGPX = []
             for interval in timeIntervalDict:
-                gpxAllUnprojectedPath = os.path.join(projectFolder, interval + '_All_unprojected')
+                gpxAllUnprojectedPath = os.path.join(delFolder, interval + '_All_unprojected')
                 gpxMergeUnprojected = processing.run("native:mergevectorlayers",
                                         {'LAYERS': timeIntervalDict[interval][1],
                                          'CRS': None,
-                                         'OUTPUT': os.path.join(projectFolder, 'intervalmerge')})['OUTPUT']
+                                         'OUTPUT': os.path.join(delFolder, 'mergeUnprojected')})['OUTPUT']
 
                 feedback.setProgressText(f'Merged all gpx file for {interval}')
 
@@ -778,7 +800,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
                 # ===========================================================================
                 # Create layer with only points less than 500m
                 # ===========================================================================
-                pointLessthan500m_UnprojectedPath = os.path.join(projectFolder,'PointLessthan500m_Unprojected' + interval)
+                pointLessthan500m_UnprojectedPath = os.path.join(delFolder,'PointLessthan500m_Unprojected' + interval)
                 pointLessthan500mExtracted = processing.run("native:extractbyexpression",
                                                   {'EXPRESSION': '"AGL" < 500',
                                                    'INPUT': AGL,
@@ -814,12 +836,13 @@ class flightPathConvert(QgsProcessingAlgorithm):
             gpxMergeUnprojected_500m = processing.run("native:mergevectorlayers",
                                     {'LAYERS': unprojectedGPX,
                                     'CRS': None,
-                                    'OUTPUT': os.path.join(projectFolder, 'pointLessthan500m_Unprojected_Final')})['OUTPUT']
+                                    'OUTPUT': os.path.join(delFolder, 'pointLessthan500m_Unprojected_Final')})['OUTPUT']
             feedback.setProgressText(f'{gpxMergeUnprojected_500m} created')
 
             # ===========================================================================
             # Reproject the result to ESPG 3005
             # ===========================================================================
+            feedback.setProgressText(f'Reprojecting allFlightPoints....')
             pointLessthan500m_Projected = processing.run("grass7:v.proj",
                                                          {'input':gpxMergeUnprojected_500m,
                                                          'crs':QgsCoordinateReferenceSystem('EPSG:3005'),
@@ -832,6 +855,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                                           'GRASS_VECTOR_DSCO':'',
                                                           'GRASS_VECTOR_LCO':'',
                                                           'GRASS_VECTOR_EXPORT_NOCAT':False})['output']
+            feedback.setProgressText(f'Reprojected allFlightPoints')
 
             # ===========================================================================
             # Merge all the flight lines
@@ -839,20 +863,27 @@ class flightPathConvert(QgsProcessingAlgorithm):
             gpxMergeFlightLines = processing.run("native:mergevectorlayers",
                                     {'LAYERS': flightLines,
                                     'CRS': None,
-                                    'OUTPUT': os.path.join(projectFolder, 'allFlightLinesUnprojected')})['OUTPUT']
+                                    'OUTPUT': os.path.join(delFolder, 'allFlightLinesUnprojected')})['OUTPUT']
+            feedback.setProgressText(f'Reprojecting allFlightLines....')
 
-            pointLessthan500m_Projected = processing.run("grass7:v.proj",
+            allFlightLines_Projected = processing.run("grass7:v.proj",
                                                          {'input': gpxMergeFlightLines,
                                                           'crs': QgsCoordinateReferenceSystem('EPSG:3005'),
                                                           'smax': 10000, '-z': False, '-w': False,
-                                                          'output': os.path.join(projectFolder, 'allFlightLines'),
+                                                          'output': 'TEMPORARY_OUTPUT',
                                                           'GRASS_REGION_PARAMETER': None,
                                                           'GRASS_SNAP_TOLERANCE_PARAMETER': -1,
                                                           'GRASS_MIN_AREA_PARAMETER': 0.0001,
                                                           'GRASS_OUTPUT_TYPE_PARAMETER': 0,
                                                           'GRASS_VECTOR_DSCO': '',
                                                           'GRASS_VECTOR_LCO': '',
-                                                          'GRASS_VECTOR_EXPORT_NOCAT': False})
+                                                          'GRASS_VECTOR_EXPORT_NOCAT': False})['output']
+
+            allFlightLines = processing.run("native:savefeatures", {
+                'INPUT': allFlightLines_Projected,
+                'OUTPUT': os.path.join(projectFolder, 'allFlightLines'), 'LAYER_NAME': '',
+                'DATASOURCE_OPTIONS': '', 'LAYER_OPTIONS': ''})
+            feedback.setProgressText(f'Reprojected allFlightLines')
 
             # ===========================================================================
             # Add and calculate Height Range field to pointLessthan500m_Projected
@@ -879,7 +910,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                                    {'expression': f"{unit_no_id}",'length': 14,'name': 'UWR_UNIT_N','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                    {'expression': '"uwr_unique_id"','length': 100,'name': 'uwr_unique_id','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                    {'expression': '"BUFF_DIST"','length': 0,'name': 'BUFF_DIST','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'}],
-                                               'OUTPUT':os.path.join(projectFolder, 'fieldMappingTEST')})['OUTPUT']
+                                               'OUTPUT':os.path.join(delFolder, 'fieldMapping')})['OUTPUT']
 
             # ===========================================================================
             # Spatial join the pointLessthan500m and the selected uwebuffered field
@@ -892,7 +923,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                    'METHOD':0,
                                    'DISCARD_NONMATCHING':True,
                                    'PREFIX':'',
-                                   'OUTPUT':os.path.join(projectFolder, 'Point_lessthan500Height_uwrbuffer')})['OUTPUT']
+                                   'OUTPUT':os.path.join(delFolder, 'Point_lessthan500Height_uwrbuffer')})['OUTPUT']
 
             # ==============================================================
             # If table is empty, ie, no point within uwr buffer zones, no need to get a table
@@ -922,6 +953,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                              + 'when "BUFF_DIST"'
                                              + f"= {low_IS} then \'Low\'\r\nend",
                                   'OUTPUT': os.path.join(projectFolder, 'allFlightPoints')})['OUTPUT']
+            feedback.setProgressText(f'{incursionSeverityField} created')
 
             # ==============================================================
             # Split points of each incursion severity in different layers
@@ -940,13 +972,8 @@ class flightPathConvert(QgsProcessingAlgorithm):
             feedback.setProgressText(f'{Exception}')
 
         finally:
+            shutil.rmtree(delFolder)
             feedback.setProgressText('Completed')
-
-
-
-
-
-
 
 
         total = 100.0 / uwrBuffered.featureCount() if uwrBuffered.featureCount() else 0
@@ -967,7 +994,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
 
-        return {'mergeGPX': pointLessthan500m_UnprojectedPath}
+        return {'allFlightPoints': incursionSeverityField}
 
     def name(self):
         """
@@ -1056,6 +1083,7 @@ class calGeneralStats(QgsProcessingAlgorithm):
         # dictionary returned by the processAlgorithm function.
         projectFolder = parameters['projectFolder']
         allFlightPoints = parameters['allFlightPoints']
+        csvPath = os.path.join(projectFolder, 'allPointsStats')
         try:
             feedback.setProgressText('---Process completed successfully---')
 
@@ -1073,7 +1101,7 @@ class calGeneralStats(QgsProcessingAlgorithm):
 
 
 
-        total = 100.0 / allFlightPoints.featureCount() if allFlightPointsd.featureCount() else 0
+        total = 100.0 / allFlightPoints.featureCount() if allFlightPoints.featureCount() else 0
         features = allFlightPoints.getFeatures()
 
         for current, feature in enumerate(features):
