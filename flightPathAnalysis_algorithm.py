@@ -46,7 +46,8 @@ from qgis.core import (QgsProcessing,
                        QgsField,
                        QgsFeature,
                        QgsVectorLayer,
-                       QgsCoordinateReferenceSystem)
+                       QgsCoordinateReferenceSystem,
+                       QgsVectorFileWriter)
 import glob
 import os
 import processing
@@ -1083,8 +1084,32 @@ class calGeneralStats(QgsProcessingAlgorithm):
         # dictionary returned by the processAlgorithm function.
         projectFolder = parameters['projectFolder']
         allFlightPoints = parameters['allFlightPoints']
-        csvPath = os.path.join(projectFolder, 'allPointsStats')
+        statsPath = os.path.join(projectFolder, 'allPointsStats')
         try:
+            allFlightPointsStats_temp = processing.run("qgis:statisticsbycategories", {
+                'INPUT': allFlightPoints,
+                'VALUES_FIELD_NAME': 'TimeInterval',
+                'CATEGORIES_FIELD_NAME': ['FlightName', 'TotalTime', 'HeightRange', 'UWR_NUMBER', 'UWR_UNIT_N',
+                                          'BUFF_DIST', 'IncursionSeverity'],
+                'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+
+            allFlightPointsStats_final = processing.run("native:refactorfields",
+                                                        {'INPUT':allFlightPointsStats_temp,
+                                                         'FIELDS_MAPPING':[
+                                                             {'expression': '"FlightName"','length': 30,'name': 'FlightName','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"TotalTime"','length': 0,'name': 'TotalTime','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
+                                                             {'expression': '"HeightRange"','length': 100,'name': 'HeightRange','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"UWR_NUMBER"','length': 14,'name': 'UWR_NUMBER','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"UWR_UNIT_N"','length': 14,'name': 'UWR_UNIT_N','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"BUFF_DIST"','length': 0,'name': 'BUFF_DIST','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
+                                                             {'expression': '"IncursionSeverity"','length': 100,'name': 'IncursionSeverity','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"sum"','length': 0,'name': 'Frequency','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'}],
+                                                         'OUTPUT':statsPath})['OUTPUT']
+            lyr = QgsVectorLayer(allFlightPointsStats_final, 'allFlightPointStats', "ogr")
+
+            QgsVectorFileWriter.writeAsVectorFormat(lyr, os.path.join(projectFolder, 'stats.xlsx'),"utf-8",driverName = "XLSX", layerOptions = ['GEOMETRY=AS_XYZ'])
+
+
             feedback.setProgressText('---Process completed successfully---')
 
         except Exception:
@@ -1101,8 +1126,8 @@ class calGeneralStats(QgsProcessingAlgorithm):
 
 
 
-        total = 100.0 / allFlightPoints.featureCount() if allFlightPoints.featureCount() else 0
-        features = allFlightPoints.getFeatures()
+        total = 100.0 / allFlightPointsStats_temp.featureCount() if allFlightPointsStats_temp.featureCount() else 0
+        features = allFlightPointsStats_temp.getFeatures()
 
         for current, feature in enumerate(features):
             # Stop the algorithm if cancel button has been clicked
@@ -1119,7 +1144,7 @@ class calGeneralStats(QgsProcessingAlgorithm):
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
 
-        return {'allFlightPoints': allFlightPoints}
+        return {'allFlightPointsStats': allFlightPointsStats_final}
 
     def name(self):
         """
