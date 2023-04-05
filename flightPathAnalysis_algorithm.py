@@ -431,7 +431,7 @@ class createUWRBuffer(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'Create UWR buffer'
+        return '1. Create UWR buffer'
 
     def displayName(self):
         """
@@ -1004,7 +1004,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'Flightpath conversion'
+        return '2. Flightpath conversion'
 
     def displayName(self):
         """
@@ -1129,7 +1129,7 @@ class calGeneralStats(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'Calculate General Stats'
+        return '3. Calculate General Stats'
 
     def displayName(self):
         """
