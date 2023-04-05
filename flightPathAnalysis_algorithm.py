@@ -783,7 +783,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
                 # ===========================================================================
                 # Extract the elevation values to points, default field name: projectdemC
                 # ===========================================================================
-                DEMElev = processing.run("saga:addrastervaluestopoints",
+                DEMElev = processing.run("sagang:addrastervaluestopoints",
                                {'SHAPES': gpxMergeUnprojected,
                                 'GRIDS': [DEM],
                                 'RESULT': 'TEMPORARY_OUTPUT',
