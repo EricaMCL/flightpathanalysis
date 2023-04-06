@@ -47,7 +47,8 @@ from qgis.core import (QgsProcessing,
                        QgsFeature,
                        QgsVectorLayer,
                        QgsCoordinateReferenceSystem,
-                       QgsVectorFileWriter)
+                       QgsVectorFileWriter,
+                       QgsException)
 import glob
 import os
 import processing
@@ -781,11 +782,41 @@ class flightPathConvert(QgsProcessingAlgorithm):
                 feedback.setProgressText(f'Merged all gpx file for {interval}')
 
                 # ===========================================================================
-                # Extract the elevation values to points, default field name: projectdemC
+                # Reproject GPX merge lyr, and create a dem extent to down the orig DEM
+                # ===========================================================================
+                gpxMergePprojected = processing.run("grass7:v.proj",
+                                                             {'input': gpxMergeUnprojected,
+                                                              'crs': QgsCoordinateReferenceSystem('EPSG:3005'),
+                                                              'smax': 10000, '-z': False, '-w': False,
+                                                              'output': os.path.join(delFolder, 'mergeProjected.gpkg'),
+                                                              'GRASS_REGION_PARAMETER': None,
+                                                              'GRASS_SNAP_TOLERANCE_PARAMETER': -1,
+                                                              'GRASS_MIN_AREA_PARAMETER': 0.0001,
+                                                              'GRASS_OUTPUT_TYPE_PARAMETER': 0,
+                                                              'GRASS_VECTOR_DSCO': '',
+                                                              'GRASS_VECTOR_LCO': '',
+                                                              'GRASS_VECTOR_EXPORT_NOCAT': False})['output']
+
+                gpxMergePprojected_extent = processing.run("native:polygonfromlayerextent",
+                               {'INPUT': gpxMergePprojected,
+                                'ROUND_TO': 0, 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+                demExtent = processing.run("native:buffer", {
+                    'INPUT': gpxMergePprojected_extent,
+                    'DISTANCE': 100, 'SEGMENTS': 90, 'END_CAP_STYLE': 2, 'JOIN_STYLE': 0, 'MITER_LIMIT': 2,
+                    'DISSOLVE': False, 'OUTPUT': os.path.join(delFolder, 'gpxMergeProjected_extent')})['OUTPUT']
+
+                demClipped = processing.run("gdal:cliprasterbymasklayer",
+                                            {'INPUT':DEM,
+                                             'MASK':demExtent,
+                                             'SOURCE_CRS':None,'TARGET_CRS':None,'TARGET_EXTENT':None,'NODATA':None,'ALPHA_BAND':False,'CROP_TO_CUTLINE':True,
+                                             'KEEP_RESOLUTION':True,'SET_RESOLUTION':False,'X_RESOLUTION':None,'Y_RESOLUTION':None,'MULTITHREADING':False,
+                                             'OPTIONS':'','DATA_TYPE':0,'EXTRA':'','OUTPUT':os.path.join(delFolder, 'demElev.tif')})['OUTPUT']
+                # ===========================================================================
+                # Extract the elevation values to points, default field name: DEMelev
                 # ===========================================================================
                 DEMElev = processing.run("sagang:addrastervaluestopoints",
-                               {'SHAPES': gpxMergeUnprojected,
-                                'GRIDS': [DEM],
+                               {'SHAPES': gpxMergePprojected,
+                                'GRIDS': [demClipped],
                                 'RESULT': 'TEMPORARY_OUTPUT',
                                 'RESAMPLING': 3})['RESULT']
                 feedback.setProgressText(f'DEM extract value to point')
@@ -796,7 +827,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                              'FIELD_TYPE':1,
                                              'FIELD_LENGTH':100,
                                              'FIELD_PRECISION':0,
-                                             'FORMULA':'case\r\nwhen "ele" - "projectdemC" <0 then 0 \r\nelse "ele" - "projectdemC"\r\nend\r\n\r\n',
+                                             'FORMULA':'case\r\nwhen "ele" - "demElev" <0 then 0 \r\nelse "ele" - "demElev"\r\nend\r\n\r\n',
                                              'OUTPUT':gpxAllUnprojectedPath})['OUTPUT']
                 # ===========================================================================
                 # Create layer with only points less than 500m
@@ -968,12 +999,12 @@ class flightPathConvert(QgsProcessingAlgorithm):
                 feedback.setProgressText(f'{diffISlyr} created')
             feedback.setProgressText('---Process completed successfully---')
 
-        except Exception:
+        except QgsException as e:
             feedback.setProgressText('Something is wrong')
-            feedback.setProgressText(f'{Exception}')
+            feedback.setProgressText(f'{e}')
 
         finally:
-            shutil.rmtree(delFolder)
+            #shutil.rmtree(delFolder)
             feedback.setProgressText('Completed')
 
 
