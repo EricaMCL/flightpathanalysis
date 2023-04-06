@@ -171,6 +171,8 @@ def findBufferRange(UseToErasePath, ToErasePath, uniqueIDFields, delFolder, buff
     outputPath = os.path.join(projectFolder, 'rawBuffer_' + str(bufferDist) + 'only')
     output = processing.run("native:mergevectorlayers", {'LAYERS': bufferedFeatures,
                                                 'OUTPUT': outputPath})['OUTPUT']
+    for feature in bufferedFeatures:
+        os.remove(feature)
     #outputLyr = output + '|layername=' + 'rawBuffer_' + str(bufferDist) + 'only'
 
 
