@@ -57,7 +57,6 @@ import shutil
 from pathlib import Path
 
 
-
 class createUWRBuffer(QgsProcessingAlgorithm):
     """
     This is an example algorithm that takes a vector layer and
@@ -468,7 +467,6 @@ class createUWRBuffer(QgsProcessingAlgorithm):
 
     def createInstance(self):
         return createUWRBuffer()
-
 
 class flightPathConvert(QgsProcessingAlgorithm):
     """
@@ -1232,7 +1230,6 @@ class calGeneralStats(QgsProcessingAlgorithm):
     def createInstance(self):
         return calGeneralStats()
 
-
 class LOS_analysis(QgsProcessingAlgorithm):
     """
     This is an example algorithm that takes a vector layer and
@@ -1316,6 +1313,11 @@ class LOS_analysis(QgsProcessingAlgorithm):
             os.mkdir(delFolder)
 
         try:
+            feedback.setProgressText(f'{projectFolder}')
+            feedback.setProgressText(f'{uwrBuffered}')
+            feedback.setProgressText(f'{maxBuffRange}')
+            feedback.setProgressText(f'{allFlightPoints}')
+            feedback.setProgressText(f'{DEM}')
 
             feedback.setProgressText('---Process completed successfully---')
 
@@ -1327,8 +1329,8 @@ class LOS_analysis(QgsProcessingAlgorithm):
             feedback.setProgressText('Completed')
 
 
-        total = 100.0 / lyr.featureCount() if lyr.featureCount() else 0
-        features = lyr.getFeatures()
+        total = 100.0 / uwrBuffered.featureCount() if uwrBuffered.featureCount() else 0
+        features = uwrBuffered.getFeatures()
 
         for current, feature in enumerate(features):
             # Stop the algorithm if cancel button has been clicked
@@ -1385,4 +1387,4 @@ class LOS_analysis(QgsProcessingAlgorithm):
         return QCoreApplication.translate('Processing', string)
 
     def createInstance(self):
-        return calGeneralStats()
+        return LOS_analysis()
