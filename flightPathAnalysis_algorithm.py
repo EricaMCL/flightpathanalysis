@@ -140,8 +140,11 @@ class createUWRBuffer(QgsProcessingAlgorithm):
         try:
 
             if os.path.exists(delFolder):
-                shutil.rmtree(delFolder)
-                os.mkdir(delFolder)
+                try:
+                    shutil.rmtree(delFolder)
+                    os.mkdir(delFolder)
+                except:
+                    feedback.setProgressText('unable to delete delFolder')
             else:
                 os.mkdir(delFolder)
 
@@ -391,12 +394,13 @@ class createUWRBuffer(QgsProcessingAlgorithm):
             else:
                 feedback.setProgressText(f'No Need to create uwr buffers')
 
-        except:
+        except QgsException as e:
             feedback.setProgressText('Something is wrong')
+            feedback.setProgressText(f'{e}')
 
         finally:
-            shutil.rmtree(delFolder)
-            feedback.setProgressText(f'{delFolder} deleted')
+            #shutil.rmtree(delFolder)
+            #feedback.setProgressText(f'{delFolder} deleted')
             feedback.setProgressText('Completed')
 
 
@@ -588,8 +592,11 @@ class flightPathConvert(QgsProcessingAlgorithm):
             # Check if the delFolder exists, and delete it if found
             # ===========================================================================
             if os.path.exists(delFolder):
-                shutil.rmtree(delFolder)
-                os.mkdir(delFolder)
+                try:
+                    shutil.rmtree(delFolder)
+                    os.mkdir(delFolder)
+                except:
+                    feedback.setProgressText('unable to delete delFolder')
             else:
                 os.mkdir(delFolder)
 
@@ -753,7 +760,6 @@ class flightPathConvert(QgsProcessingAlgorithm):
                 feedback.setProgressText(f'===========================================')
 
 
-
             # ===========================================================================
             # Output the problem text to the gpx folder
             # ===========================================================================
@@ -879,7 +885,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                                          {'input':gpxMergeUnprojected_500m,
                                                          'crs':QgsCoordinateReferenceSystem('EPSG:3005'),
                                                           'smax':10000,'-z':False,'-w':False,
-                                                          'output':'TEMPORARY_OUTPUT',
+                                                          'output':os.path.join(projectFolder, 'pointLessthan500m_Projected.gpkg'),
                                                           'GRASS_REGION_PARAMETER':None,
                                                           'GRASS_SNAP_TOLERANCE_PARAMETER':-1,
                                                           'GRASS_MIN_AREA_PARAMETER':0.0001,
@@ -927,7 +933,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                   'FIELD_LENGTH': 100,
                                   'FIELD_PRECISION': 0,
                                   'FORMULA': 'case\nwhen "AGL" < 400 then \'0 to 400m\'\nelse \'400 to 500m\'\nend ',
-                                  'OUTPUT': os.path.join(projectFolder, 'pointLessthan500m_Projected')})['OUTPUT']
+                                  'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
             feedback.setProgressText(f'Height Range field calculated')
 
@@ -1116,49 +1122,58 @@ class calGeneralStats(QgsProcessingAlgorithm):
         projectFolder = parameters['projectFolder']
         allFlightPoints = parameters['allFlightPoints']
         statsPath = os.path.join(projectFolder, 'allPointsStats')
+        delFolder = os.path.join(projectFolder, 'delFolder')
+        # ===========================================================================
+        # Check if the delFolder exists, and delete it if found
+        # ===========================================================================
+        if os.path.exists(delFolder):
+            try:
+                shutil.rmtree(delFolder)
+                os.mkdir(delFolder)
+            except:
+                feedback.setProgressText('unable to delete delFolder')
+        else:
+            os.mkdir(delFolder)
+
         try:
             allFlightPointsStats_temp = processing.run("qgis:statisticsbycategories", {
                 'INPUT': allFlightPoints,
                 'VALUES_FIELD_NAME': 'TimeInterval',
-                'CATEGORIES_FIELD_NAME': ['FlightName', 'TotalTime', 'HeightRange', 'UWR_NUMBER', 'UWR_UNIT_N',
+                'CATEGORIES_FIELD_NAME': ['NameTkline', 'FlightName', 'TotalTime', 'HeightRange', 'UWR_NUMBER', 'UWR_UNIT_N',
                                           'BUFF_DIST', 'IncursionSeverity'],
-                'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+                'OUTPUT': os.path.join(delFolder, 'statsTemp')})['OUTPUT']
 
             allFlightPointsStats_final = processing.run("native:refactorfields",
                                                         {'INPUT':allFlightPointsStats_temp,
                                                          'FIELDS_MAPPING':[
-                                                             {'expression': '"FlightName"','length': 30,'name': 'FlightName','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"NameTkline"','length': 21,'name': 'NameTkline','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"FlightName"','length': 34,'name': 'FlightName','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                              {'expression': '"TotalTime"','length': 0,'name': 'TotalTime','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
                                                              {'expression': '"HeightRange"','length': 100,'name': 'HeightRange','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                              {'expression': '"UWR_NUMBER"','length': 14,'name': 'UWR_NUMBER','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                              {'expression': '"UWR_UNIT_N"','length': 14,'name': 'UWR_UNIT_N','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                              {'expression': '"BUFF_DIST"','length': 0,'name': 'BUFF_DIST','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
                                                              {'expression': '"IncursionSeverity"','length': 100,'name': 'IncursionSeverity','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"sum"','length': 0,'name': 'Frequency','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'}],
+                                                             {'expression': '"count"','length': 0,'name': 'Frequency','precision': 0,'sub_type': 0,'type': 2,'type_name': 'integer'},
+                                                             {'expression': '"sum"','length': 0,'name': 'TotalIncursionTime','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'}],
                                                          'OUTPUT':statsPath})['OUTPUT']
             lyr = QgsVectorLayer(allFlightPointsStats_final, 'allFlightPointStats', "ogr")
 
-            QgsVectorFileWriter.writeAsVectorFormat(lyr, os.path.join(projectFolder, 'stats.xlsx'),"utf-8",driverName = "XLSX", layerOptions = ['GEOMETRY=AS_XYZ'])
+            QgsVectorFileWriter.writeAsVectorFormat(lyr, statsPath ,"utf-8",driverName = "XLSX", layerOptions = ['GEOMETRY=AS_XYZ'])
 
 
             feedback.setProgressText('---Process completed successfully---')
 
-        except Exception:
+        except QgsException as e:
             feedback.setProgressText('Something is wrong')
-            feedback.setProgressText(f'{Exception}')
+            feedback.setProgressText(f'{e}')
 
         finally:
             feedback.setProgressText('Completed')
 
 
-
-
-
-
-
-
-        total = 100.0 / allFlightPointsStats_temp.featureCount() if allFlightPointsStats_temp.featureCount() else 0
-        features = allFlightPointsStats_temp.getFeatures()
+        total = 100.0 / lyr.featureCount() if lyr.featureCount() else 0
+        features = lyr.getFeatures()
 
         for current, feature in enumerate(features):
             # Stop the algorithm if cancel button has been clicked

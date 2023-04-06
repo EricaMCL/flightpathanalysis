@@ -165,14 +165,19 @@ def findBufferRange(UseToErasePath, ToErasePath, uniqueIDFields, delFolder, buff
                                              'OUTPUT': out_features, 'GRID_SIZE': None})
 
         bufferedFeatures.append(out_features + '.gpkg|layername=' + "outfeature" + str(out_count) + '__' + str(bufferDist))
+        bufferedFeatures_delPath.append(out_features + '.gpkg')
 
     projectFolder = os.path.split(delFolder)[0]
     # merge all outputs
     outputPath = os.path.join(projectFolder, 'rawBuffer_' + str(bufferDist) + 'only')
     output = processing.run("native:mergevectorlayers", {'LAYERS': bufferedFeatures,
                                                 'OUTPUT': outputPath})['OUTPUT']
-    for feature in bufferedFeatures:
-        os.remove(feature)
+
+    for feature in bufferedFeatures_delPath:
+        try:
+            os.remove(feature)
+        except:
+            continue
     #outputLyr = output + '|layername=' + 'rawBuffer_' + str(bufferDist) + 'only'
 
 
