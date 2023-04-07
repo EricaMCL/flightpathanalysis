@@ -1252,6 +1252,10 @@ class LOS_analysis(QgsProcessingAlgorithm):
     maxBufferRange = 'maxBufferRange'
     DEM = 'DEM'
     allFlightPoints = 'allFlightPoints'
+    unit_id = 'unit_id'
+    unit_id_no = 'unit_id_no'
+    viewshed = 'viewshed'
+    minElevViewshed = 'minElevViewshed'
 
     def initAlgorithm(self, config):
         """
@@ -1269,6 +1273,15 @@ class LOS_analysis(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterFeatureSource(
             self.uwrBuffered, self.tr('Input uwrBuffered'), [QgsProcessing.TypeVectorPolygon]))
         # ===========================================================================
+        # unit_id / unit_id_no - Input string
+        # User selects from the field list derived from OrigUWR
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterField(
+            self.unit_id, self.tr('Input unit id field, column has text like u-2-002'), 'unit_id', self.uwrBuffered))
+
+        self.addParameter(QgsProcessingParameterField(
+            self.unit_id_no, self.tr('Input unit id number field, column has text like Mg-059'), 'unit_id', self.uwrBuffered))
+        # ===========================================================================
         # max buffer range
         # ===========================================================================
         self.addParameter(QgsProcessingParameterString(
@@ -1283,6 +1296,13 @@ class LOS_analysis(QgsProcessingAlgorithm):
         # ===========================================================================
         self.addParameter(QgsProcessingParameterRasterLayer(
             self.DEM, self.tr('Input the project DEM')))
+        # ===========================================================================
+        # viewshed
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterFeatureSource(
+            self.viewshed, self.tr('Existed viewshed'), [QgsProcessing.TypeVectorPolygon], optional=True))
+        self.addParameter(QgsProcessingParameterFeatureSource(
+            self.minElevViewshed, self.tr('Existed minElevViewshed'), [QgsProcessing.TypeVectorPolygon], optional=True))
 
 
 
@@ -1295,10 +1315,12 @@ class LOS_analysis(QgsProcessingAlgorithm):
         # dictionary returned by the processAlgorithm function.
         projectFolder = parameters['projectFolder']
         uwrBuffered = parameters['uwrBuffered']
+        uwrBuffered_source = self.parameterAsSource(parameters, self.uwrBuffered, context)
         maxBuffRange = parameters['maxBufferRange']
         allFlightPoints = parameters['allFlightPoints']
         DEM = parameters['DEM']
-
+        existedViewshed = parameters['viewshed']
+        existedMinElevViewshed = parameters['minElevViewshed']
         delFolder = os.path.join(projectFolder, 'delFolder')
         # ===========================================================================
         # Check if the delFolder exists, and delete it if found
@@ -1318,6 +1340,54 @@ class LOS_analysis(QgsProcessingAlgorithm):
             feedback.setProgressText(f'{maxBuffRange}')
             feedback.setProgressText(f'{allFlightPoints}')
             feedback.setProgressText(f'{DEM}')
+            feedback.setProgressText(f'{existedViewshed}')
+            feedback.setProgressText(f'{existedMinElevViewshed}')
+
+            # ==============================================================
+            # unit_no, eg. u-2-002
+            # unit_no_id, eg. Mg-106
+            # unit_unique_field, field that combines uwr number and uwr unit number
+            # ==============================================================
+            unit_no = parameters['unit_id']
+            unit_no_id = parameters['unit_id_no']
+            uwr_unique_Field = "uwr_unique_id"
+
+            # ==============================================================
+            # Get list of relevant UWR
+            # ==============================================================
+            uwrFieldList = uwrBuffered_source.fields().names()
+            unit_no_index = uwrFieldList.index(unit_no)
+            unit_no_id_index = uwrFieldList.index(unit_no_id)
+            feedback.setProgressText(f'{unit_no_id_index, unit_no_index}')
+            uwrSet = set()
+            for feature in uwrBuffered_source.getFeatures():
+                uwr_unique_Field_value = f'{feature.attributes()[unit_no_index]}__{feature.attributes()[unit_no_id_index]}'
+                uwrSet.add(uwr_unique_Field_value)
+            feedback.setProgressText(f'{uwrSet}')
+
+            # ==============================================================
+            # Get list of uwr that have viewshed created
+            # ==============================================================
+            viewshedUWRset = set()
+            UWRRequireViewshedSet = None
+            if existedViewshed != None:
+                viewshed_source = self.parameterAsSource(parameters, self.viewshed, context)
+                uwrFieldList = uwrBuffered_source.fields().names()
+                uwr_unique_Field_index = uwrFieldList.index(uwr_unique_Field)
+                feedback.setProgressText(f'{uwr_unique_Field_index}')
+                for feature in viewshed_source.getFeatures():
+                    uwr_unique_Field_value = f'{feature.attributes()[uwr_unique_Field_index]}'
+                    uwrSet.add(uwr_unique_Field_value)
+                UWRRequireViewshedSet = uwrSet - viewshedUWRset
+            else:
+                UWRRequireViewshedSet = uwrSet
+                feedback.setProgressText(f'No existed viewshed layer')
+
+            # ==============================================================
+            # Create viewshed for uwr that doesn't have any. Either makes a new final viewshed or appends to the old one
+            # ==============================================================
+            if len(UWRRequireViewshedSet) > 0:
+                feedback.setProgressText(f'No existed viewshed layer')
 
             feedback.setProgressText('---Process completed successfully---')
 

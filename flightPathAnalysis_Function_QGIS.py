@@ -39,10 +39,6 @@ def convert_timedelta(duration):
     seconds = seconds % 60
     return seconds
 
-
-
-
-
 def rawBuffer(origFCLoc, origFCName, bufferDistanceInput, bufferDist, projectFolder, unit_no, unit_no_id,
               uwr_unique_Field):
     """
@@ -182,6 +178,28 @@ def findBufferRange(UseToErasePath, ToErasePath, uniqueIDFields, delFolder, buff
 
 
     return output
+
+def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_unique_Field, tempFolder, DEM, viewshed, minElevViewshed):
+    UWR_noBuffer = 'UWR_noBuffer'
+    UWRVertices = 'UWRVertices'
+    UWR_Buffer = 'UWR_Buffer'
+
+    # ==============================================================
+    # name of feature layers
+    # ==============================================================
+    UWR_noBuffer_lyr = 'UWR_noBuffer_lyr'
+    UWRVertices_lyr = 'UWRVertices_lyr'
+    UWR_Buffer_lyr = 'UWR_Buffer_lyr'
+    UWR_DEMPoints_lyr = 'UWR_DEMPoints_lyr'
+    polygonViewshed_lyr = 'polygonViewshed_lyr'
+    polygon_aglViewshed_lyr = 'polygon_aglViewshed_lyr'
+
+    # ==============================================================
+    # create a lyr with relevent UWR - 0m buffer
+    # ==============================================================
+    uwrSet_str = "','".join(uwrList)
+
+
 
 ##functions for terrain masking
 ##just use this function to create viewshed
