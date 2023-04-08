@@ -187,17 +187,23 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
     # ==============================================================
     # name of feature layers
     # ==============================================================
-    UWR_noBuffer_lyr = 'UWR_noBuffer_lyr'
-    UWRVertices_lyr = 'UWRVertices_lyr'
-    UWR_Buffer_lyr = 'UWR_Buffer_lyr'
-    UWR_DEMPoints_lyr = 'UWR_DEMPoints_lyr'
-    polygonViewshed_lyr = 'polygonViewshed_lyr'
-    polygon_aglViewshed_lyr = 'polygon_aglViewshed_lyr'
+    #UWR_noBuffer_lyr = 'UWR_noBuffer_lyr'
+    #UWRVertices_lyr = 'UWRVertices_lyr'
+    #UWR_Buffer_lyr = 'UWR_Buffer_lyr'
+    #UWR_DEMPoints_lyr = 'UWR_DEMPoints_lyr'
+    #polygonViewshed_lyr = 'polygonViewshed_lyr'
+    #polygon_aglViewshed_lyr = 'polygon_aglViewshed_lyr'
 
     # ==============================================================
     # create a lyr with relevent UWR - 0m buffer
     # ==============================================================
     uwrSet_str = "','".join(uwrList)
+    expression = uwr_unique_Field + r" in ('" + uwrSet_str + r"') and BUFF_DIST = 0"
+    UWR_noBuffer_lyr = processing.run("native:extractbyexpression",
+                                            {'EXPRESSION': expression,
+                                             'INPUT': uwrBuffered,
+                                             'OUTPUT': os.path.join(tempFolder, UWR_noBuffer)})['OUTPUT']
+    return UWR_noBuffer_lyr
 
 
 

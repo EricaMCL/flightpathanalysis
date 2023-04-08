@@ -52,7 +52,7 @@ from qgis.core import (QgsProcessing,
 import glob
 import os
 import processing
-from .flightPathAnalysis_Function_QGIS import rawBuffer, findBufferRange, replaceNonAlphaNum, convert_timedelta
+from .flightPathAnalysis_Function_QGIS import rawBuffer, findBufferRange, replaceNonAlphaNum, convert_timedelta, makeViewshed
 import shutil
 from pathlib import Path
 
@@ -1388,6 +1388,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
             # ==============================================================
             if len(UWRRequireViewshedSet) > 0:
                 feedback.setProgressText(f'No existed viewshed layer')
+                makeViewshed(UWRRequireViewshedSet, uwrBuffered, maxBuffRange, unit_no, unit_no_id, uwr_unique_Field, delFolder, DEM, existedViewshed, existedMinElevViewshed)
 
             feedback.setProgressText('---Process completed successfully---')
 
