@@ -203,6 +203,70 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                             {'EXPRESSION': expression,
                                              'INPUT': uwrBuffered,
                                              'OUTPUT': os.path.join(tempFolder, UWR_noBuffer)})['OUTPUT']
+
+    # ==============================================================
+    # Generalize/simplify UWR (0m buffer)
+    # ==============================================================
+    simplifyUWR = processing.run("native:simplifygeometries",
+                                 {'INPUT':UWR_noBuffer_lyr,
+                                  'METHOD':0,
+                                  'TOLERANCE':1,
+                                  'OUTPUT':'TEMPORARY_OUTPUT'})['OUTPUT']
+
+    # ==============================================================
+    # Convert uwr polygons to vertices
+    # ==============================================================
+    UWRVertices = processing.run("sagang:convertpolygonlineverticestopoints",
+                                       {'SHAPES': simplifyUWR,
+                                        'POINTS':'TEMPORARY_OUTPUT'})['POINTS']
+
+    # ==============================================================
+    # Get DEM of vertices
+    # ==============================================================
+    DEMElev = processing.run("sagang:addrastervaluestopoints",
+                             {'SHAPES': UWRVertices,
+                              'GRIDS': [DEM],
+                              'RESULT': 'TEMPORARY_OUTPUT',
+                              'RESAMPLING': 3})['RESULT']
+
+
+    # ==============================================================
+    # Make feature class with relevant UWR buffered. includes all buffer distances
+    # ==============================================================
+    expression = uwr_unique_Field + " in ('" + uwrSet_str + "')"
+    UWR_Buffer = processing.run("native:extractbyexpression",
+                                      {'EXPRESSION': expression,
+                                       'INPUT': uwrBuffered,
+                                       'OUTPUT': os.path.join(tempFolder, UWR_Buffer)})['OUTPUT']
+
+    # ==============================================================
+    #
+    # ==============================================================
+    for uwr in uwrList:
+        uwrstarttime = datetime.datetime.now()
+        name_uwr = replaceNonAlphaNum(uwr, "_")
+        rasterViewshed = "rasterViewshed_" + name_uwr
+        agl_rasterViewshed = "agl_rasterViewshed" + name_uwr
+        polygonViewshed = "polygonViewshed_" + name_uwr
+        totalViewshed = "totalViewshed_" + name_uwr
+        totalViewshed_dis = totalViewshed + "dis"
+        int_aglViewshed = "int_aglViewshed" + name_uwr
+        polygon_aglViewshed = "polygon_aglViewshed" + name_uwr
+        dissolved_aglViewshed = "dissolved_aglViewshed" + name_uwr
+
+        UWR_DEMClip = "DEMClip" + name_uwr
+        BufferUWR_DEMClip = "Buffer_DEMClip_" + name_uwr
+        UWR_DEMPoints = "UWR_DEMPoints" + name_uwr
+        UWRBuffer_DEMPoints = "UWRBuffer_DEMPoints" + name_uwr
+        UWR_ViewshedObsPoints = "UWR_ViewshedObsPoints" + name_uwr
+
+        uwr_no = uwr[:uwr.find("__")]
+        uwr_no_id = uwr[uwr.find("__")+2:]
+
+    # ==============================================================
+    # check to find the right query depending on if uwr fields are integer or text
+    # ==============================================================
+
     return UWR_noBuffer_lyr
 
 

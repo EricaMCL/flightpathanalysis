@@ -1390,6 +1390,9 @@ class LOS_analysis(QgsProcessingAlgorithm):
                 feedback.setProgressText(f'No existed viewshed layer')
                 makeViewshed(UWRRequireViewshedSet, uwrBuffered, maxBuffRange, unit_no, unit_no_id, uwr_unique_Field, delFolder, DEM, existedViewshed, existedMinElevViewshed)
 
+            else:
+                feedback.setProgressText('No need to make viewsheds')
+
             feedback.setProgressText('---Process completed successfully---')
 
         except QgsException as e:
