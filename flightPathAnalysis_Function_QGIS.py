@@ -264,10 +264,36 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         uwr_no_id = uwr[uwr.find("__")+2:]
 
     # ==============================================================
-    # check to find the right query depending on if uwr fields are integer or text
+    # Check to find the right query depending on if uwr fields are integer or text
     # ==============================================================
+        UWR_Buffer_lyr = QgsVectorLayer((UWR_Buffer), "", "ogr")
+        expression = None
+        for feature in UWR_Buffer_lyr.getFeatures():
+            UWR_Buffer_lyr_fields = UWR_Buffer_lyr.fields().names()
+            unit_no_index = [UWR_Buffer_lyr_fields.index(unit_no), UWR_Buffer_lyr_fields.index(unit_no)]
+            unit_no_attribute = feature.attributes()[unit_no_index[0]]
+            unit_no_id_index = [UWR_Buffer_lyr_fields.index(unit_no_id), UWR_Buffer_lyr_fields.index(unit_no_id)]
+            unit_no_id_attribute = feature.attributes()[unit_no_id_index[0]]
 
-    return UWR_noBuffer_lyr
+            if type(unit_no_attribute) == int:
+                expression = '(\"' + unit_no + '\" = ' + uwr_no + ')'
+            else:
+                expression = '(\"' + unit_no + '\" = \'' + uwr_no + "')"
+
+            if type(unit_no_id_attribute) == int:
+                expression += ' AND (\"' + unit_no_id + '\" = ' + uwr_no_id + ')'
+            else:
+                expression += ' AND (\"' + unit_no_id + '\" = \'' + uwr_no_id + "')"
+
+            break
+
+        UWR_Buffer_selected = processing.run("native:extractbyexpression",
+                                            {'EXPRESSION': expression,
+                                             'INPUT': UWR_Buffer,
+                                             'OUTPUT': os.path.join(tempFolder, 'uwrSelected')})['OUTPUT']
+
+
+    return UWR_Buffer_selected
 
 
 
