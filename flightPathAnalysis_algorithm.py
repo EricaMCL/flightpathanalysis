@@ -870,12 +870,15 @@ class flightPathConvert(QgsProcessingAlgorithm):
             # ===========================================================================
             # Merge all unprojectedGPS layers that includes points below 500m
             # ===========================================================================
-            gpxMergeUnprojected_500m = processing.run("sagang:mergevectorlayers", {
+            if len(unprojectedGPX) > 1:
+                gpxMergeUnprojected_500m = processing.run("sagang:mergevectorlayers", {
                 'INPUT': unprojectedGPX,
                 'MERGED': os.path.join(delFolder, 'pointLessthan500m_Unprojected_Final'),
                 'SRCINFO': False,
                 'MATCH': True,
-                'DELETE': False})['MERGED']
+                'DELETE': False})['MERGED'] + '.shp'
+            else:
+                gpxMergeUnprojected_500m = unprojectedGPX[0]
 
 
             feedback.setProgressText(f'{gpxMergeUnprojected_500m} created')
@@ -883,17 +886,16 @@ class flightPathConvert(QgsProcessingAlgorithm):
             # Remove blank fields from gpxMergeUnprojected_500m_Final
             # ===========================================================================
             gpxMergeUnprojected_500m_reprojected = processing.run("native:refactorfields",
-                                                {'INPUT':gpxMergeUnprojected_500m + '.shp',
+                                                {'INPUT':gpxMergeUnprojected_500m,
                                                 'FIELDS_MAPPING':[{'expression': '"cat"','length': 16,'name': 'cat','precision': 0,'sub_type': 0,'type': 4,'type_name': 'int8'},
                                                                   {'expression': '"ele"','length': 18,'name': 'ele','precision': 10,'sub_type': 0,'type': 6,'type_name': 'double precision'},
                                                                   {'expression': '"time"','length': 23,'name': 'time','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                                   {'expression': '"hdop"','length': 18,'name': 'hdop','precision': 10,'sub_type': 0,'type': 6,'type_name': 'double precision'},
                                                                   {'expression': '"badelf_spe"','length': 18,'name': 'badelf_spe','precision': 10,'sub_type': 0,'type': 6,'type_name': 'double precision'},
-                                                                  {'expression': '"NameTkline"','length': 22,'name': 'NameTkline','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                                  {'expression': '"NameTkline"','length': 35,'name': 'NameTkline','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                                   {'expression': '"FlightName"','length': 34,'name': 'FlightName','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                                   {'expression': '"TotalTime"','length': 18,'name': 'TotalTime','precision': 10,'sub_type': 0,'type': 6,'type_name': 'double precision'},
                                                                   {'expression': '"layer"','length': 39,'name': 'layer','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                                  {'expression': '"path"','length': 85,'name': 'path','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                                   {'expression': '"demElev"','length': 18,'name': 'demElev','precision': 10,'sub_type': 0,'type': 6,'type_name': 'double precision'},
                                                                   {'expression': '"AGL"','length': 16,'name': 'AGL','precision': 0,'sub_type': 0,'type': 4,'type_name': 'int8'},
                                                                   {'expression': '"TimeInterv"','length': 18,'name': 'TimeInterv','precision': 10,'sub_type': 0,'type': 6,'type_name': 'double precision'}],
