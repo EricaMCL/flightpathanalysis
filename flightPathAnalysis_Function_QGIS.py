@@ -291,9 +291,22 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                             {'EXPRESSION': expression,
                                              'INPUT': UWR_Buffer,
                                              'OUTPUT': os.path.join(tempFolder, 'uwrSelected')})['OUTPUT']
+        UWR_Buffer_selected = QgsVectorLayer((UWR_Buffer), "", "ogr")
+        ext = UWR_Buffer_selected.extent()
+        xMin = ext.xMinimum()
+        xMax = ext.xMaximum()
+        yMin = ext.yMinimum()
+        yMax = ext.yMaximum()
 
 
-    return UWR_Buffer_selected
+        #clippedDEM = processing.run("gdal:cliprasterbyextent",
+        #               {'INPUT': DEM,
+        #                'PROJWIN': ext,
+        #                'OVERCRS': False, 'NODATA': None, 'OPTIONS': '', 'DATA_TYPE': 0, 'EXTRA': '',
+        #                'OUTPUT': os.path.join(tempFolder, 'clippedDEM')})
+
+
+    return [xMax, xMin, yMin, yMax, ext]
 
 
 
