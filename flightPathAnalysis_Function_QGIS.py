@@ -290,23 +290,28 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         UWR_Buffer_selected = processing.run("native:extractbyexpression",
                                             {'EXPRESSION': expression,
                                              'INPUT': UWR_Buffer,
-                                             'OUTPUT': os.path.join(tempFolder, 'uwrSelected')})['OUTPUT']
-        UWR_Buffer_selected = QgsVectorLayer((UWR_Buffer), "", "ogr")
-        ext = UWR_Buffer_selected.extent()
-        xMin = ext.xMinimum()
-        xMax = ext.xMaximum()
-        yMin = ext.yMinimum()
-        yMax = ext.yMaximum()
+                                             'OUTPUT': os.path.join(tempFolder, f'uwrSelected_{name_uwr}')})['OUTPUT']
+
+        UWR_Buffer_selected_ext = processing.run("native:polygonfromlayerextent",
+                                                   {'INPUT': UWR_Buffer_selected,
+                                                    'ROUND_TO': 0, 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+        demClipped = processing.run("gdal:cliprasterbymasklayer",
+                                    {'INPUT': DEM,
+                                     'MASK': UWR_Buffer_selected_ext,
+                                     'SOURCE_CRS': None, 'TARGET_CRS': None, 'TARGET_EXTENT': None, 'NODATA': None,
+                                     'ALPHA_BAND': False, 'CROP_TO_CUTLINE': True,
+                                     'KEEP_RESOLUTION': True, 'SET_RESOLUTION': False, 'X_RESOLUTION': None,
+                                     'Y_RESOLUTION': None, 'MULTITHREADING': False,
+                                     'OPTIONS': '', 'DATA_TYPE': 0, 'EXTRA': '',
+                                     'OUTPUT': os.path.join(tempFolder, f'dem_{name_uwr}.tif')})['OUTPUT']
 
 
-        #clippedDEM = processing.run("gdal:cliprasterbyextent",
-        #               {'INPUT': DEM,
-        #                'PROJWIN': ext,
-        #                'OVERCRS': False, 'NODATA': None, 'OPTIONS': '', 'DATA_TYPE': 0, 'EXTRA': '',
-        #                'OUTPUT': os.path.join(tempFolder, 'clippedDEM')})
 
 
-    return [xMax, xMin, yMin, yMax, ext]
+
+
+
+    return None
 
 
 
