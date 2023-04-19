@@ -223,7 +223,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
     # ==============================================================
     # Get DEM of vertices
     # ==============================================================
-    DEMElev = processing.run("sagang:addrastervaluestopoints",
+    UWRVertices_Lyr = processing.run("sagang:addrastervaluestopoints",
                              {'SHAPES': UWRVertices,
                               'GRIDS': [DEM],
                               'RESULT': 'TEMPORARY_OUTPUT',
@@ -295,6 +295,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         UWR_Buffer_selected_ext = processing.run("native:polygonfromlayerextent",
                                                    {'INPUT': UWR_Buffer_selected,
                                                     'ROUND_TO': 0, 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+
         demClipped = processing.run("gdal:cliprasterbymasklayer",
                                     {'INPUT': DEM,
                                      'MASK': UWR_Buffer_selected_ext,
@@ -305,13 +306,46 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                      'OPTIONS': '', 'DATA_TYPE': 0, 'EXTRA': '',
                                      'OUTPUT': os.path.join(tempFolder, f'dem_{name_uwr}.tif')})['OUTPUT']
 
+        UWR_Buffer_selected_orig = processing.run("native:extractbyexpression",
+                                            {'EXPRESSION': expression + " and (BUFF_DIST = 0)",
+                                             'INPUT': UWR_Buffer,
+                                             'OUTPUT': os.path.join(tempFolder, f'uwrSelected_{name_uwr}')})['OUTPUT']
+
+        UWR_Buffer_selected_ext_orig = processing.run("native:polygonfromlayerextent",
+                                                   {'INPUT': UWR_Buffer_selected_orig,
+                                                    'ROUND_TO': 0, 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+
+        demClipped_orig = processing.run("gdal:cliprasterbymasklayer",
+                                    {'INPUT': DEM,
+                                     'MASK': UWR_Buffer_selected_ext_orig,
+                                     'SOURCE_CRS': None, 'TARGET_CRS': None, 'TARGET_EXTENT': None, 'NODATA': None,
+                                     'ALPHA_BAND': False, 'CROP_TO_CUTLINE': True,
+                                     'KEEP_RESOLUTION': True, 'SET_RESOLUTION': False, 'X_RESOLUTION': None,
+                                     'Y_RESOLUTION': None, 'MULTITHREADING': False,
+                                     'OPTIONS': '', 'DATA_TYPE': 0, 'EXTRA': '',
+                                     'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+
+        rasToPnt = processing.run("native:pixelstopoints", {'INPUT_RASTER':demClipped_orig,
+                                                            'RASTER_BAND':1,
+                                                            'FIELD_NAME':'DEMElev',
+                                                            'OUTPUT': os.path.join(tempFolder, UWR_DEMPoints)})
+
+        vertice_Selected = processing.run("native:extractbyexpression",
+                                            {'EXPRESSION': expression + " and (BUFF_DIST = 0)",
+                                             'INPUT': UWRVertices_Lyr,
+                                             'OUTPUT': os.path.join(tempFolder, f'uwrSelected_{name_uwr}')})['OUTPUT']
+
+
+        DEMvalues = UWR_Buffer_lyr.getFeatures().attributes()
+        minValue = min(DEMvalues)
 
 
 
 
 
 
-    return None
+
+    return [minValue, DEMvalues]
 
 
 
