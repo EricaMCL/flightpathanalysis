@@ -287,6 +287,10 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
 
             break
 
+        # ==============================================================
+        # Clip DEM using max buffer range
+        # ==============================================================
+
         UWR_Buffer_selected = processing.run("native:extractbyexpression",
                                             {'EXPRESSION': expression,
                                              'INPUT': UWR_Buffer,
@@ -306,6 +310,9 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                      'OPTIONS': '', 'DATA_TYPE': 0, 'EXTRA': '',
                                      'OUTPUT': os.path.join(tempFolder, f'dem_{name_uwr}.tif')})['OUTPUT']
 
+        # ==============================================================
+        # Clip DEM using original uwr range
+        # ==============================================================
         UWR_Buffer_selected_orig = processing.run("native:extractbyexpression",
                                             {'EXPRESSION': expression + " and (BUFF_DIST = 0)",
                                              'INPUT': UWR_Buffer,
@@ -325,6 +332,9 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                      'OPTIONS': '', 'DATA_TYPE': 0, 'EXTRA': '',
                                      'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
+        # ==============================================================
+        # Convert original clipped DEM to points
+        # ==============================================================
         rasToPoi = processing.run("native:pixelstopoints", {'INPUT_RASTER':demClipped_orig,
                                                             'RASTER_BAND':1,
                                                             'FIELD_NAME':'DEMElev',
@@ -335,6 +345,9 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                              'INPUT': UWRVertices_Lyr,
                                              'OUTPUT': os.path.join(tempFolder, f'uwrSelected_{name_uwr}')})['OUTPUT']
 
+        # ==============================================================
+        # Get list of DEM values in UWR that are higher than the min DEM value of vertices
+        # ==============================================================
         vertice_Selected_lyr = QgsVectorLayer((vertice_Selected), "", "ogr")
         minValue = 9999
         for feature in vertice_Selected_lyr.getFeatures():
@@ -346,6 +359,18 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                             {'EXPRESSION': "DEMElev > " + str(minValue),
                                              'INPUT': UWRVertices_Lyr,
                                              'OUTPUT': os.path.join(tempFolder, UWR_DEMPoints)})['OUTPUT']
+
+        # ==============================================================
+        # Add all higher than min DEM value points to vertices layer
+        # ==============================================================
+        UWRVertices_merge = processing.run("native:mergevectorlayers",
+                                             {'LAYERS': [UWRDEMpoi_Selected, UWRVertices_Lyr],
+                                              'CRS': None,
+                                              'OUTPUT': os.path.join(tempFolder, UWR_ViewshedObsPoints)})['OUTPUT']
+
+        # ==============================================================
+        # Make raster viewshed
+        # ==============================================================
 
 
 
