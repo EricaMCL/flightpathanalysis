@@ -325,7 +325,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                      'OPTIONS': '', 'DATA_TYPE': 0, 'EXTRA': '',
                                      'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
-        rasToPnt = processing.run("native:pixelstopoints", {'INPUT_RASTER':demClipped_orig,
+        rasToPoi = processing.run("native:pixelstopoints", {'INPUT_RASTER':demClipped_orig,
                                                             'RASTER_BAND':1,
                                                             'FIELD_NAME':'DEMElev',
                                                             'OUTPUT': os.path.join(tempFolder, UWR_DEMPoints)})
@@ -336,11 +336,16 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                              'OUTPUT': os.path.join(tempFolder, f'uwrSelected_{name_uwr}')})['OUTPUT']
 
         vertice_Selected_lyr = QgsVectorLayer((vertice_Selected), "", "ogr")
-        minValue = 0
+        minValue = 9999
         for feature in vertice_Selected_lyr.getFeatures():
-            DEMvalue = feature.attributes()[0]
+            DEMvalue = feature.attributes()[1]
             if DEMvalue < minValue and not None:
                 minValue = DEMvalue
+
+        UWRDEMpoi_Selected = processing.run("native:extractbyexpression",
+                                            {'EXPRESSION': "DEMElev > " + str(minValue),
+                                             'INPUT': UWRVertices_Lyr,
+                                             'OUTPUT': os.path.join(tempFolder, UWR_DEMPoints)})['OUTPUT']
 
 
 
