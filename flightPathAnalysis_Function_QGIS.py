@@ -335,17 +335,21 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                              'INPUT': UWRVertices_Lyr,
                                              'OUTPUT': os.path.join(tempFolder, f'uwrSelected_{name_uwr}')})['OUTPUT']
 
-
-        DEMvalues = UWR_Buffer_lyr.getFeatures().attributes()
-        minValue = min(DEMvalues)
-
-
-
-
-
+        vertice_Selected_lyr = QgsVectorLayer((vertice_Selected), "", "ogr")
+        minValue = 0
+        for feature in vertice_Selected_lyr.getFeatures():
+            DEMvalue = feature.attributes()[0]
+            if DEMvalue < minValue and not None:
+                minValue = DEMvalue
 
 
-    return [minValue, DEMvalues]
+
+
+
+
+
+
+    return [minValue]
 
 
 
