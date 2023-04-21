@@ -52,6 +52,8 @@ from qgis.core import (QgsProcessing,
                        QgsException)
 import glob
 import os
+
+import pandas as pd
 import processing
 from .flightPathAnalysis_Function_QGIS import rawBuffer, findBufferRange, replaceNonAlphaNum, convert_timedelta, makeViewshed
 import shutil
@@ -1554,6 +1556,21 @@ class LOS_analysis(QgsProcessingAlgorithm):
                                                     {'EXPRESSION': " gridcode is Null ",
                                                      'INPUT': nonTerrainMaskedPoi_merge,
                                                      'OUTPUT': os.path.join(delFolder, 'LOS_uwrFlightPoints_selected')})['OUTPUT']
+
+            poi_underDirectViewshed_count = processing.run("qgis:basicstatisticsforfields", {
+                'INPUT_LAYER': LOS_uwrFlightPoints_selected,
+                'FIELD_NAME': 'OBJECTID', 'OUTPUT_HTML_FILE': 'TEMPORARY_OUTPUT'})['COUNT']
+            feedback.setProgressText(f'Points under direct viewshed: {poi_underDirectViewshed_count}')
+            viewshedPointCount[uwr] = poi_underDirectViewshed_count
+
+            # ==============================================================
+            # Getting count found in direct viewshed into excel
+            # ==============================================================
+            dfViewshed = pd.DataFrame.from_dict(viewshedPointCount, orient='index')
+            dfViewshed.columns = ['points found in viewshed']
+            feedback.setProgressText(f'ViewshedPointCount: {viewshedPointCount}')
+            dfViewshed.to_excel(os.path.join(projectFolder, 'ViewshedPointCount.xlsx'))
+            feedback.setProgressText(f'ViewshedPointCount.xlsx created in {projectFolder}')
 
 
 
