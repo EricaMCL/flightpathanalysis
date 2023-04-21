@@ -1278,7 +1278,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
     # calling from the QGIS console.
     projectFolder = 'projectFolder'
     uwrBuffered = 'uwrBuffered'
-    maxBufferRange = 'maxBufferRange'
+    #maxBufferRange = 'maxBufferRange'
     DEM = 'DEM'
     allFlightPoints = 'allFlightPoints'
     unit_id = 'unit_id'
@@ -1313,8 +1313,8 @@ class LOS_analysis(QgsProcessingAlgorithm):
         # ===========================================================================
         # max buffer range
         # ===========================================================================
-        self.addParameter(QgsProcessingParameterString(
-            self.maxBufferRange, self.tr('Max Buffer Range'), 1500))
+        #self.addParameter(QgsProcessingParameterString(
+        #    self.maxBufferRange, self.tr('Max Buffer Range'), 1500))
         # ===========================================================================
         # allFlightPoints (created from flightpath conversion)
         # ===========================================================================
@@ -1329,9 +1329,9 @@ class LOS_analysis(QgsProcessingAlgorithm):
         # viewshed
         # ===========================================================================
         self.addParameter(QgsProcessingParameterFeatureSource(
-            self.viewshed, self.tr('Existed viewshed'), [QgsProcessing.TypeVectorPolygon], optional=True))
+            self.viewshed, self.tr('Existed viewshed'), [QgsProcessing.TypeVectorPolygon]))
         self.addParameter(QgsProcessingParameterFeatureSource(
-            self.minElevViewshed, self.tr('Existed minElevViewshed'), [QgsProcessing.TypeVectorPolygon], optional=True))
+            self.minElevViewshed, self.tr('Existed minElevViewshed'), [QgsProcessing.TypeVectorPolygon]))
 
 
 
@@ -1345,7 +1345,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
         projectFolder = parameters['projectFolder']
         uwrBuffered = parameters['uwrBuffered']
         uwrBuffered_source = self.parameterAsSource(parameters, self.uwrBuffered, context)
-        maxBuffRange = parameters['maxBufferRange']
+        #maxBuffRange = parameters['maxBufferRange']
         allFlightPoints = parameters['allFlightPoints']
         DEM = parameters['DEM']
         existedViewshed = parameters['viewshed']
@@ -1366,7 +1366,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
         try:
             feedback.setProgressText(f'{projectFolder}')
             feedback.setProgressText(f'{uwrBuffered}')
-            feedback.setProgressText(f'{maxBuffRange}')
+            #feedback.setProgressText(f'{maxBuffRange}')
             feedback.setProgressText(f'{allFlightPoints}')
             feedback.setProgressText(f'{DEM}')
             feedback.setProgressText(f'{existedViewshed}')
@@ -1400,10 +1400,9 @@ class LOS_analysis(QgsProcessingAlgorithm):
             viewshedUWRset = set()
             UWRRequireViewshedSet = None
             if existedViewshed != None:
-                exit()
                 viewshed_source = self.parameterAsSource(parameters, self.viewshed, context)
-                uwrFieldList = uwrBuffered_source.fields().names()
-                uwr_unique_Field_index = uwrFieldList.index(uwr_unique_Field)
+                viewshedFieldList = viewshed_source.fields().names()
+                uwr_unique_Field_index = viewshedFieldList.index('uwr_unique')
                 feedback.setProgressText(f'{uwr_unique_Field_index}')
                 for feature in viewshed_source.getFeatures():
                     uwr_unique_Field_value = f'{feature.attributes()[uwr_unique_Field_index]}'
@@ -1490,11 +1489,12 @@ class LOS_analysis(QgsProcessingAlgorithm):
                 # all flight points associated with the UWR
                 # ==============================================================
                 uwrFlightPoints_selectedLyr = QgsVectorLayer((uwrFlightPoints_selected), "", "ogr")
-                for feature in minElevViewshedLyr.getFeatures():
-                    uwrFlightPoints_selectedLyr_fields = minElevViewshedLyr.fields().names()
-                    fidIndex = minElevViewshedLyr_fields.index('OBJECTID')
+                for feature in uwrFlightPoints_selectedLyr.getFeatures():
+                    uwrFlightPoints_selectedLyr_fields = uwrFlightPoints_selectedLyr.fields().names()
+                    fidIndex = uwrFlightPoints_selectedLyr_fields.index('id')
                     fid_attribute = feature.attributes()[fidIndex]
                     uwrFlightPointsSet.add(fid_attribute)
+                feedback.setProgressText(f'uwrFlightPointsSet: {uwrFlightPointsSet}')
 
                 # ==============================================================
                 # Spatial join points with points that aren't in the direct viewshed but within the buffer zone
@@ -1504,16 +1504,16 @@ class LOS_analysis(QgsProcessingAlgorithm):
                                 'PREDICATE': [0],
                                 'JOIN': minElevViewshedLyr_selected,
                                 'JOIN_FIELDS': [], 'METHOD': 2, 'DISCARD_NONMATCHING': False, 'PREFIX': '',
-                                'OUTPUT': 'TEMPORARY_OUTPUT'})
+                                'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
                 # ==============================================================
                 # Getting the points that are terrain masked
                 # ==============================================================
                 points_aglViewshed_NumSet = set()
-                poisAglViewshedLyr = QgsVectorLayer((points_aglViewshed), "", "ogr")
+                poisAglViewshedLyr = QgsVectorLayer((poisAglViewshed), "", "ogr")
                 for feature in poisAglViewshedLyr.getFeatures():
                     poisAglViewshedLyr_fields = poisAglViewshedLyr.fields().names()
-                    fidIndex = poisAglViewshedLyr_fields.index('OBJECTID')
+                    fidIndex = poisAglViewshedLyr_fields.index('id')
                     fid_attribute = feature.attributes()[fidIndex]
                     aglIndex = poisAglViewshedLyr_fields.index('AGL')
                     agl_attribute = feature.attributes()[aglIndex]
@@ -1521,13 +1521,14 @@ class LOS_analysis(QgsProcessingAlgorithm):
                     gridcode_attribute = feature.attributes()[gridcodeIndex]
                     if gridcode_attribute is not None and agl_attribute < gridcode_attribute:
                         points_aglViewshed_NumSet.add(str(fid_attribute))
+                feedback.setProgressText(f'points_aglViewshed_NumSet: {points_aglViewshed_NumSet}')
 
                 if len(points_aglViewshed_NumSet) == 0:
                     finalSQL = None
 
                 else:
                     terrainMaskPoi = ','.join(points_aglViewshed_NumSet)
-                    finalSQL = "OBJECTID NOT IN (" + terrainMaskPoi + ")"
+                    finalSQL = "ID NOT IN (" + terrainMaskPoi + ")"
 
                 uwr_notmasked_selected = processing.run("native:extractbyexpression",
                                                         {'EXPRESSION': finalSQL,
