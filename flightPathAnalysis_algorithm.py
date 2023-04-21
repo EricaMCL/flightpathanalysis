@@ -1537,6 +1537,25 @@ class LOS_analysis(QgsProcessingAlgorithm):
                 # ==============================================================
                 uwr_notmasked_List.append(uwr_notmasked_selected)
 
+            # ==============================================================
+            # Create final layer of all points that aren't terrain masked
+            # ==============================================================
+            nonTerrainMaskedPoi_merge = processing.run("native:mergevectorlayers",
+                                               {'LAYERS': uwr_notmasked_List,
+                                                'CRS': None,
+                                                'OUTPUT': os.path.join(delFolder, 'LOS_uwrFlightPoints')})['OUTPUT']
+
+            feedback.setProgressText('Merged all non terrain masked points together')
+
+            # ==============================================================
+            # Get count of points that are in direct viewshed
+            # ==============================================================
+            LOS_uwrFlightPoints_selected = processing.run("native:extractbyexpression",
+                                                    {'EXPRESSION': " gridcode is Null ",
+                                                     'INPUT': nonTerrainMaskedPoi_merge,
+                                                     'OUTPUT': os.path.join(delFolder, 'LOS_uwrFlightPoints_selected')})['OUTPUT']
+
+
 
 
 
