@@ -30,6 +30,7 @@ __copyright__ = '(C) 2023 by Erica Liu'
 
 __revision__ = '$Format:%H$'
 
+import datetime
 from qgis.PyQt.QtCore import QCoreApplication, QVariant
 from qgis.core import (QgsProcessing,
                        QgsFeatureSink,
@@ -1397,6 +1398,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
             viewshedUWRset = set()
             UWRRequireViewshedSet = None
             if existedViewshed != None:
+                exit()
                 viewshed_source = self.parameterAsSource(parameters, self.viewshed, context)
                 uwrFieldList = uwrBuffered_source.fields().names()
                 uwr_unique_Field_index = uwrFieldList.index(uwr_unique_Field)
@@ -1414,11 +1416,132 @@ class LOS_analysis(QgsProcessingAlgorithm):
             # ==============================================================
             if len(UWRRequireViewshedSet) > 0:
                 feedback.setProgressText(f'No existed viewshed layer')
-                ext = makeViewshed(UWRRequireViewshedSet, uwrBuffered, maxBuffRange, unit_no, unit_no_id, uwr_unique_Field, delFolder, DEM, existedViewshed, existedMinElevViewshed)
-                feedback.setProgressText(f'{ext}')
+                #ext = makeViewshed(UWRRequireViewshedSet, uwrBuffered, maxBuffRange, unit_no, unit_no_id, uwr_unique_Field, delFolder, DEM, existedViewshed, existedMinElevViewshed)
+                exit()
 
             else:
                 feedback.setProgressText('No need to make viewsheds')
+
+            # ==============================================================
+            #
+            # ==============================================================
+            finalPointsSet = set()
+
+            # ==============================================================
+            # Count of points intersecting with the viewshed for each UWR
+            # ==============================================================
+            viewshedPointCount = {}
+
+            # ==============================================================
+            # List of layers with points that are not terrain masked
+            # ==============================================================
+            uwr_notmasked_List = []
+
+            for uwr in uwrSet:
+                nameUWR = replaceNonAlphaNum(uwr, "_")
+                points_aglViewshed = 'points_aglViewshed' + nameUWR
+                uwr_notmasked = 'notMasked' + nameUWR
+                feedback.setProgressText('Finding LOS flight points fpr uwr')
+                LOS_uwrFlightPointsLyr = 'LOS_uwrFlightPoints'
+                uwrPointsStatsTime = datetime.datetime.now()
+                uwrFlightPointsSet = set()
+                NotLOSSet = set()
+
+                uwr_no = uwr[:uwr.find("__")]
+                uwr_no_id = uwr[uwr.find("__") + 2:]
+
+                # ==============================================================
+                # Check to find the right query depending on if uwr fields are integer or text
+                # ==============================================================
+                minElevViewshedLyr = QgsVectorLayer((existedMinElevViewshed), "", "ogr")
+                expression = None
+                for feature in minElevViewshedLyr.getFeatures():
+                    minElevViewshedLyr_fields = minElevViewshedLyr.fields().names()
+                    unit_no_index = minElevViewshedLyr_fields.index(unit_no)
+                    unit_no_attribute = feature.attributes()[unit_no_index]
+                    unit_no_id_index = minElevViewshedLyr_fields.index(unit_no_id)
+                    unit_no_id_attribute = feature.attributes()[unit_no_id_index]
+
+                    if type(unit_no_attribute) == int:
+                        expression = '(\"' + unit_no + '\" = ' + uwr_no + ')'
+                    else:
+                        expression = '(\"' + unit_no + '\" = \'' + uwr_no + "')"
+
+                    if type(unit_no_id_attribute) == int:
+                        expression += ' AND (\"' + unit_no_id + '\" = ' + uwr_no_id + ')'
+                    else:
+                        expression += ' AND (\"' + unit_no_id + '\" = \'' + uwr_no_id + "')"
+
+                    break
+
+                minElevViewshedLyr_selected = processing.run("native:extractbyexpression",
+                                                     {'EXPRESSION': expression + " AND ( gridcode <> 0 )",
+                                                      'INPUT': minElevViewshedLyr,
+                                                      'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+
+                uwrFlightPoints_selected = processing.run("native:extractbyexpression",
+                                                     {'EXPRESSION': expression + " AND ( gridcode <> 0 )",
+                                                      'INPUT': allFlightPoints,
+                                                      'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+
+                # ==============================================================
+                # all flight points associated with the UWR
+                # ==============================================================
+                uwrFlightPoints_selectedLyr = QgsVectorLayer((uwrFlightPoints_selected), "", "ogr")
+                for feature in minElevViewshedLyr.getFeatures():
+                    uwrFlightPoints_selectedLyr_fields = minElevViewshedLyr.fields().names()
+                    fidIndex = minElevViewshedLyr_fields.index('OBJECTID')
+                    fid_attribute = feature.attributes()[fidIndex]
+                    uwrFlightPointsSet.add(fid_attribute)
+
+                # ==============================================================
+                # Spatial join points with points that aren't in the direct viewshed but within the buffer zone
+                # ==============================================================
+                poisAglViewshed = processing.run("native:joinattributesbylocation",
+                               {'INPUT':uwrFlightPoints_selected ,
+                                'PREDICATE': [0],
+                                'JOIN': minElevViewshedLyr_selected,
+                                'JOIN_FIELDS': [], 'METHOD': 2, 'DISCARD_NONMATCHING': False, 'PREFIX': '',
+                                'OUTPUT': 'TEMPORARY_OUTPUT'})
+
+                # ==============================================================
+                # Getting the points that are terrain masked
+                # ==============================================================
+                points_aglViewshed_NumSet = set()
+                poisAglViewshedLyr = QgsVectorLayer((points_aglViewshed), "", "ogr")
+                for feature in poisAglViewshedLyr.getFeatures():
+                    poisAglViewshedLyr_fields = poisAglViewshedLyr.fields().names()
+                    fidIndex = poisAglViewshedLyr_fields.index('OBJECTID')
+                    fid_attribute = feature.attributes()[fidIndex]
+                    aglIndex = poisAglViewshedLyr_fields.index('AGL')
+                    agl_attribute = feature.attributes()[aglIndex]
+                    gridcodeIndex = poisAglViewshedLyr_fields.index('gridcode')
+                    gridcode_attribute = feature.attributes()[gridcodeIndex]
+                    if gridcode_attribute is not None and agl_attribute < gridcode_attribute:
+                        points_aglViewshed_NumSet.add(str(fid_attribute))
+
+                if len(points_aglViewshed_NumSet) == 0:
+                    finalSQL = None
+
+                else:
+                    terrainMaskPoi = ','.join(points_aglViewshed_NumSet)
+                    finalSQL = "OBJECTID NOT IN (" + terrainMaskPoi + ")"
+
+                uwr_notmasked_selected = processing.run("native:extractbyexpression",
+                                                        {'EXPRESSION': finalSQL,
+                                                         'INPUT': poisAglViewshed,
+                                                         'OUTPUT': os.path.join(delFolder, uwr_notmasked)})['OUTPUT']
+
+                # ==============================================================
+                # Put into a list of all the layers of points that are terrain masked
+                # ==============================================================
+                uwr_notmasked_List.append(uwr_notmasked_selected)
+
+
+
+
+
+
 
             feedback.setProgressText('---Process completed successfully---')
 

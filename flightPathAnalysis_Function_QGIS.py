@@ -226,7 +226,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
     UWRVertices_Lyr = processing.run("sagang:addrastervaluestopoints",
                              {'SHAPES': UWRVertices,
                               'GRIDS': [DEM],
-                              'RESULT': 'TEMPORARY_OUTPUT',
+                              'RESULT': os.path.join(tempFolder, 'verticesLyr'),
                               'RESAMPLING': 3})['RESULT']
 
 
@@ -294,7 +294,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         UWR_Buffer_selected = processing.run("native:extractbyexpression",
                                             {'EXPRESSION': expression,
                                              'INPUT': UWR_Buffer,
-                                             'OUTPUT': os.path.join(tempFolder, f'uwrSelected_{name_uwr}')})['OUTPUT']
+                                             'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
         UWR_Buffer_selected_ext = processing.run("native:polygonfromlayerextent",
                                                    {'INPUT': UWR_Buffer_selected,
@@ -316,7 +316,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         UWR_Buffer_selected_orig = processing.run("native:extractbyexpression",
                                             {'EXPRESSION': expression + " and (BUFF_DIST = 0)",
                                              'INPUT': UWR_Buffer,
-                                             'OUTPUT': os.path.join(tempFolder, f'uwrSelected_{name_uwr}')})['OUTPUT']
+                                             'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
         UWR_Buffer_selected_ext_orig = processing.run("native:polygonfromlayerextent",
                                                    {'INPUT': UWR_Buffer_selected_orig,
@@ -330,7 +330,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                      'KEEP_RESOLUTION': True, 'SET_RESOLUTION': False, 'X_RESOLUTION': None,
                                      'Y_RESOLUTION': None, 'MULTITHREADING': False,
                                      'OPTIONS': '', 'DATA_TYPE': 0, 'EXTRA': '',
-                                     'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+                                     'OUTPUT': os.path.join(tempFolder, f'dem_{name_uwr}_orig.tif')})['OUTPUT']
 
         # ==============================================================
         # Convert original clipped DEM to points
@@ -358,13 +358,13 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         UWRDEMpoi_Selected = processing.run("native:extractbyexpression",
                                             {'EXPRESSION': "DEMElev > " + str(minValue),
                                              'INPUT': UWRVertices_Lyr,
-                                             'OUTPUT': os.path.join(tempFolder, UWR_DEMPoints)})['OUTPUT']
+                                             'OUTPUT': os.path.join(tempFolder, UWR_DEMPoints + '_selected')})['OUTPUT']
 
         # ==============================================================
         # Add all higher than min DEM value points to vertices layer
         # ==============================================================
         UWRVertices_merge = processing.run("native:mergevectorlayers",
-                                             {'LAYERS': [UWRDEMpoi_Selected, UWRVertices_Lyr],
+                                             {'LAYERS': [UWRDEMpoi_Selected, vertice_Selected],
                                               'CRS': None,
                                               'OUTPUT': os.path.join(tempFolder, UWR_ViewshedObsPoints)})['OUTPUT']
 
