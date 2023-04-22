@@ -1379,7 +1379,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
             # ==============================================================
             unit_no = parameters['unit_id']
             unit_no_id = parameters['unit_id_no']
-            uwr_unique_Field = "uwr_unique_id"
+            uwr_unique_Field = 'uwr_unique'
 
             # ==============================================================
             # Get list of relevant UWR
@@ -1406,7 +1406,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
                 feedback.setProgressText(f'{uwr_unique_Field_index}')
                 for feature in viewshed_source.getFeatures():
                     uwr_unique_Field_value = f'{feature.attributes()[uwr_unique_Field_index]}'
-                    uwrSet.add(uwr_unique_Field_value)
+                    viewshedUWRset.add(uwr_unique_Field_value)
                 UWRRequireViewshedSet = uwrSet - viewshedUWRset
             else:
                 UWRRequireViewshedSet = uwrSet
