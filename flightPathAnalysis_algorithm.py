@@ -901,7 +901,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                                                   {'expression': '"layer"','length': 39,'name': 'layer','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                                   {'expression': '"demElev"','length': 18,'name': 'demElev','precision': 10,'sub_type': 0,'type': 6,'type_name': 'double precision'},
                                                                   {'expression': '"AGL"','length': 16,'name': 'AGL','precision': 0,'sub_type': 0,'type': 4,'type_name': 'int8'},
-                                                                  {'expression': '"TimeInterv"','length': 18,'name': 'TimeInterv','precision': 10,'sub_type': 0,'type': 6,'type_name': 'double precision'}],
+                                                                  {'expression': '"TimeInterval"','length': 18,'name': 'TimeInterval','precision': 10,'sub_type': 0,'type': 6,'type_name': 'double precision'}],
                                                  'OUTPUT':'TEMPORARY_OUTPUT'})['OUTPUT']
 
             # ===========================================================================
