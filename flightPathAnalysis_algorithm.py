@@ -1167,10 +1167,10 @@ class calGeneralStats(QgsProcessingAlgorithm):
                 'INPUT': allFlightPoints,
                 'VALUES_FIELD_NAME': 'TimeInterval',
                 'CATEGORIES_FIELD_NAME': ['NameTkline', 'FlightName', 'TotalTime', 'HeightRange', 'UWR_NUMBER', 'UWR_UNIT_N',
-                                          'BUFF_DIST', 'IncursionSeverity'],
+                                          'BUFF_DIST', 'IncursionSeverity', "TimeInterv"],
                 'OUTPUT': os.path.join(delFolder, 'statsTemp')})['OUTPUT']
 
-            allFlightPointsStats_final = processing.run("native:refactorfields",
+            allFlightPointsStats_fieldMapping = processing.run("native:refactorfields",
                                                         {'INPUT':allFlightPointsStats_temp,
                                                          'FIELDS_MAPPING':[
                                                              {'expression': '"NameTkline"','length': 21,'name': 'NameTkline','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
@@ -1181,9 +1181,17 @@ class calGeneralStats(QgsProcessingAlgorithm):
                                                              {'expression': '"UWR_UNIT_N"','length': 14,'name': 'UWR_UNIT_N','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                              {'expression': '"BUFF_DIST"','length': 0,'name': 'BUFF_DIST','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
                                                              {'expression': '"IncursionSeverity"','length': 100,'name': 'IncursionSeverity','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"count"','length': 0,'name': 'Frequency','precision': 0,'sub_type': 0,'type': 2,'type_name': 'integer'},
-                                                             {'expression': '"sum"','length': 0,'name': 'TotalIncursionTime','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'}],
-                                                         'OUTPUT':statsPath})['OUTPUT']
+                                                             {'expression': '"TimeInterv"', 'length': 0,'name': 'TimeInterv', 'precision': 0, 'sub_type': 0,'type': 6, 'type_name': 'double precision'},
+                                                             {'expression': '"count"','length': 0,'name': 'Frequency','precision': 0,'sub_type': 0,'type': 2,'type_name': 'integer'}],
+                                                         'OUTPUT':'TEMPORARY_OUTPUT'})['OUTPUT']
+            allFlightPointsStats_final = processing.run("native:fieldcalculator", {'INPUT':allFlightPointsStats_fieldMapping,
+                                                                              'FIELD_NAME':'TotalIncursionTime',
+                                                                              'FIELD_TYPE':0,
+                                                                              'FIELD_LENGTH':100,
+                                                                              'FIELD_PRECISION':2,
+                                                                              'FORMULA':' "Frequency" * "TimeInterv" ',
+                                                                              'OUTPUT':statsPath})['OUTPUT']
+
             lyr = QgsVectorLayer(allFlightPointsStats_final, 'allFlightPointStats', "ogr")
 
             QgsVectorFileWriter.writeAsVectorFormat(lyr, statsPath ,"utf-8",driverName = "XLSX", layerOptions = ['GEOMETRY=AS_XYZ'])
@@ -1418,6 +1426,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
             if len(UWRRequireViewshedSet) > 0:
                 feedback.setProgressText(f'No existed viewshed layer')
                 #ext = makeViewshed(UWRRequireViewshedSet, uwrBuffered, maxBuffRange, unit_no, unit_no_id, uwr_unique_Field, delFolder, DEM, existedViewshed, existedMinElevViewshed)
+                feedback.setProgressText(f'{UWRRequireViewshedSet}')
                 exit()
 
             else:
@@ -1476,22 +1485,23 @@ class LOS_analysis(QgsProcessingAlgorithm):
                     break
 
                 minElevViewshedLyr_selected = processing.run("native:extractbyexpression",
-                                                     {'EXPRESSION': expression + " AND ( gridcode <> 0 )",
+                                                     {'EXPRESSION': expression + " AND (gridcode <> 0)",
                                                       'INPUT': minElevViewshedLyr,
                                                       'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+                feedback.setProgressText(f'minElevViewshed_Lyr_selected')
 
                 uwrFlightPoints_selected = processing.run("native:extractbyexpression",
-                                                     {'EXPRESSION': expression + " AND ( gridcode <> 0 )",
+                                                     {'EXPRESSION': expression,
                                                       'INPUT': allFlightPoints,
-                                                      'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
-
+                                                      'OUTPUT': os.path.join(delFolder, 'uwrFlightPoints_selected')})['OUTPUT']
+                feedback.setProgressText(f'uwrFlightPoints_selected')
                 # ==============================================================
                 # all flight points associated with the UWR
                 # ==============================================================
                 uwrFlightPoints_selectedLyr = QgsVectorLayer((uwrFlightPoints_selected), "", "ogr")
                 for feature in uwrFlightPoints_selectedLyr.getFeatures():
                     uwrFlightPoints_selectedLyr_fields = uwrFlightPoints_selectedLyr.fields().names()
-                    fidIndex = uwrFlightPoints_selectedLyr_fields.index('id')
+                    fidIndex = uwrFlightPoints_selectedLyr_fields.index('fid')
                     fid_attribute = feature.attributes()[fidIndex]
                     uwrFlightPointsSet.add(fid_attribute)
                 feedback.setProgressText(f'uwrFlightPointsSet: {uwrFlightPointsSet}')
@@ -1504,7 +1514,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
                                 'PREDICATE': [0],
                                 'JOIN': minElevViewshedLyr_selected,
                                 'JOIN_FIELDS': [], 'METHOD': 2, 'DISCARD_NONMATCHING': False, 'PREFIX': '',
-                                'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+                                'OUTPUT': os.path.join(delFolder, 'pointAGL')})['OUTPUT']
 
                 # ==============================================================
                 # Getting the points that are terrain masked
@@ -1513,7 +1523,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
                 poisAglViewshedLyr = QgsVectorLayer((poisAglViewshed), "", "ogr")
                 for feature in poisAglViewshedLyr.getFeatures():
                     poisAglViewshedLyr_fields = poisAglViewshedLyr.fields().names()
-                    fidIndex = poisAglViewshedLyr_fields.index('id')
+                    fidIndex = poisAglViewshedLyr_fields.index('fid')
                     fid_attribute = feature.attributes()[fidIndex]
                     aglIndex = poisAglViewshedLyr_fields.index('AGL')
                     agl_attribute = feature.attributes()[aglIndex]
@@ -1524,7 +1534,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
                 feedback.setProgressText(f'points_aglViewshed_NumSet: {points_aglViewshed_NumSet}')
 
                 if len(points_aglViewshed_NumSet) == 0:
-                    finalSQL = None
+                        finalSQL = None
 
                 else:
                     terrainMaskPoi = ','.join(points_aglViewshed_NumSet)
@@ -1539,6 +1549,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
                 # Put into a list of all the layers of points that are terrain masked
                 # ==============================================================
                 uwr_notmasked_List.append(uwr_notmasked_selected)
+                feedback.setProgressText(f'{uwr_notmasked_selected}')
 
             # ==============================================================
             # Create final layer of all points that aren't terrain masked
@@ -1572,13 +1583,6 @@ class LOS_analysis(QgsProcessingAlgorithm):
             feedback.setProgressText(f'ViewshedPointCount: {viewshedPointCount}')
             dfViewshed.to_excel(os.path.join(projectFolder, 'ViewshedPointCount.xlsx'))
             feedback.setProgressText(f'ViewshedPointCount.xlsx created in {projectFolder}')
-
-
-
-
-
-
-
 
             feedback.setProgressText('---Process completed successfully---')
 
@@ -1649,3 +1653,171 @@ class LOS_analysis(QgsProcessingAlgorithm):
 
     def createInstance(self):
         return LOS_analysis()
+
+class finalPointsStats(QgsProcessingAlgorithm):
+    """
+    This is an example algorithm that takes a vector layer and
+    creates a new identical one.
+
+    It is meant to be used as an example of how to create your own
+    algorithms and explain methods and variables used to do it. An
+    algorithm like this will be available in all elements, and there
+    is not need for additional work.
+
+    All Processing algorithms should extend the QgsProcessingAlgorithm
+    class.
+    """
+
+    # Constants used to refer to parameters and outputs. They will be
+    # used when calling the algorithm from another algorithm, or when
+    # calling from the QGIS console.
+    projectFolder = 'projectFolder'
+    LOS_finalPoints = 'LOS_finalPoints'
+
+    def initAlgorithm(self, config):
+        """
+        Here we define the inputs and output of the algorithm, along
+        with some other properties.
+        """
+        # ===========================================================================
+        # Project Folder
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterFile(
+            self.projectFolder, self.tr('Project Folder'), QgsProcessingParameterFile.Folder))
+        # ===========================================================================
+        # uwrBuffered
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterFeatureSource(
+            self.LOS_finalPoints, self.tr('Input LOS_finalPoints'), [QgsProcessing.TypeVectorPoint]))
+
+
+
+    def processAlgorithm(self, parameters, context, feedback):
+        """
+        Here is where the processing itself takes place.
+        """
+        # Retrieve the feature source and sink. The 'dest_id' variable is used
+        # to uniquely identify the feature sink, and must be included in the
+        # dictionary returned by the processAlgorithm function.
+        projectFolder = parameters['projectFolder']
+        LOS_finalPoints = parameters['LOS_finalPoints']
+        statsPath = os.path.join(projectFolder, 'finalPointsStats')
+        delFolder = os.path.join(projectFolder, 'delFolder')
+        # ===========================================================================
+        # Check if the delFolder exists, and delete it if found
+        # ===========================================================================
+        if os.path.exists(delFolder):
+            try:
+                shutil.rmtree(delFolder)
+                os.mkdir(delFolder)
+            except:
+                feedback.setProgressText('unable to delete delFolder')
+        else:
+            os.mkdir(delFolder)
+
+        try:
+            # ==============================================================
+            # unit_no, eg. u-2-002
+            # unit_no_id, eg. Mg-106
+            # unit_unique_field, field that combines uwr number and uwr unit number
+            # ==============================================================
+            unit_no = "UWR_NUMBER"
+            unit_no_id = "UWR_UNIT_NUMBER"
+            uwr_unique_Field = "uwr_unique"
+
+            LOS_finalPointsStats_temp = processing.run("qgis:statisticsbycategories", {
+                'INPUT': LOS_finalPoints,
+                'VALUES_FIELD_NAME': 'TimeInterval',
+                'CATEGORIES_FIELD_NAME': ['NameTkline', 'FlightName', 'TotalTime', 'HeightRange', 'UWR_NUMBER', 'UWR_UNIT_N',
+                                          'BUFF_DIST', 'IncursionSeverity', "TimeInterv"],
+                'OUTPUT': os.path.join(delFolder, 'LOS_statsTemp')})['OUTPUT']
+
+            LOS_finalPointsStats_fieldMapping = processing.run("native:refactorfields",
+                                                        {'INPUT':LOS_finalPointsStats_temp,
+                                                         'FIELDS_MAPPING':[
+                                                             {'expression': '"NameTkline"','length': 21,'name': 'NameTkline','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"FlightName"','length': 34,'name': 'FlightName','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"TotalTime"','length': 0,'name': 'TotalTime','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
+                                                             {'expression': '"HeightRange"','length': 100,'name': 'HeightRange','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"UWR_NUMBER"','length': 14,'name': 'UWR_NUMBER','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"UWR_UNIT_N"','length': 14,'name': 'UWR_UNIT_N','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"BUFF_DIST"','length': 0,'name': 'BUFF_DIST','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
+                                                             {'expression': '"IncursionSeverity"','length': 100,'name': 'IncursionSeverity','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"sum"','length': 0,'name': 'TimeInterv','precision': 0,'sub_type': 0,'type': 2,'type_name': 'integer'}],
+                                                         'OUTPUT':'TEMPORARY_OUTPUT'})['OUTPUT']
+
+
+            lyr = QgsVectorLayer(LOS_finalPointsStats_fieldMapping, 'LOS_finalPointsStats', "ogr")
+
+            QgsVectorFileWriter.writeAsVectorFormat(lyr, statsPath ,"utf-8",driverName = "XLSX", layerOptions = ['GEOMETRY=AS_XYZ'])
+
+
+            feedback.setProgressText('---Process completed successfully---')
+
+        except QgsException as e:
+            feedback.setProgressText('Something is wrong')
+            feedback.setProgressText(f'{e}')
+
+        finally:
+            feedback.setProgressText('Completed')
+
+
+        total = 100.0 / lyr.featureCount() if lyr.featureCount() else 0
+        features = lyr.getFeatures()
+
+        for current, feature in enumerate(features):
+            # Stop the algorithm if cancel button has been clicked
+            if feedback.isCanceled():
+                break
+
+            # Update the progress bar
+            feedback.setProgress(int(current * total))
+
+        # Return the results of the algorithm. In this case our only result is
+        # the feature sink which contains the processed features, but some
+        # algorithms may return multiple feature sinks, calculated numeric
+        # statistics, etc. These should all be included in the returned
+        # dictionary, with keys matching the feature corresponding parameter
+        # or output names.
+
+        return {'LOS_finalPointsStats': LOS_finalPointsStats_fieldMapping}
+
+    def name(self):
+        """
+        Returns the algorithm name, used for identifying the algorithm. This
+        string should be fixed for the algorithm, and must not be localised.
+        The name should be unique within each provider. Names should contain
+        lowercase alphanumeric characters only and no spaces or other
+        formatting characters.
+        """
+        return '5. LOS Final Points Stats'
+
+    def displayName(self):
+        """
+        Returns the translated algorithm name, which should be used for any
+        user-visible display of the algorithm name.
+        """
+        return self.tr(self.name())
+
+    def group(self):
+        """
+        Returns the name of the group this algorithm belongs to. This string
+        should be localised.
+        """
+        return self.tr(self.groupId())
+
+    def groupId(self):
+        """
+        Returns the unique ID of the group this algorithm belongs to. This
+        string should be fixed for the algorithm, and must not be localised.
+        The group id should be unique within each provider. Group id should
+        contain lowercase alphanumeric characters only and no spaces or other
+        formatting characters.
+        """
+        return '2023_Project'
+
+    def tr(self, string):
+        return QCoreApplication.translate('Processing', string)
+
+    def createInstance(self):
+        return finalPointsStats()
