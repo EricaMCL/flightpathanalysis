@@ -1538,7 +1538,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
 
                 else:
                     terrainMaskPoi = ','.join(points_aglViewshed_NumSet)
-                    finalSQL = "ID NOT IN (" + terrainMaskPoi + ")"
+                    finalSQL = "fid NOT IN (" + terrainMaskPoi + ")"
 
                 uwr_notmasked_selected = processing.run("native:extractbyexpression",
                                                         {'EXPRESSION': finalSQL,
@@ -1821,3 +1821,194 @@ class finalPointsStats(QgsProcessingAlgorithm):
 
     def createInstance(self):
         return finalPointsStats()
+
+
+class flightPathAnalysis(QgsProcessingAlgorithm):
+    """
+    This is an example algorithm that takes a vector layer and
+    creates a new identical one.
+
+    It is meant to be used as an example of how to create your own
+    algorithms and explain methods and variables used to do it. An
+    algorithm like this will be available in all elements, and there
+    is not need for additional work.
+
+    All Processing algorithms should extend the QgsProcessingAlgorithm
+    class.
+    """
+
+    # Constants used to refer to parameters and outputs. They will be
+    # used when calling the algorithm from another algorithm, or when
+    # calling from the QGIS console.
+    projectFolder = 'projectFolder'
+    origUWR = 'origUWR'
+    unit_id = 'unit_id'
+    unit_id_no = 'unit_id_no'
+    gpxFolder = 'gpxFolder'
+    DEM = 'DEM'
+    buffDistIS_high = 'buffDistIS_high'
+    buffDistIS_moderate = 'buffDistIS_moderate'
+    buffDistIS_low = 'buffDistIS_low'
+    viewshed = 'viewshed'
+    minElevViewshed = 'minElevViewshed'
+
+    def initAlgorithm(self, config):
+        """
+        Here we define the inputs and output of the algorithm, along
+        with some other properties.
+        """
+        # ===========================================================================
+        # Project Folder
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterFile(
+            self.projectFolder, self.tr('Project Folder'), QgsProcessingParameterFile.Folder))
+        # ===========================================================================
+        # OrigUWR - Input vector polygon
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterFeatureSource(
+            self.origUWR, self.tr('Input original UWR'), [QgsProcessing.TypeVectorPolygon]))
+        # ===========================================================================
+        # unit_id / unit_id_no - Input string
+        # User selects from the field list derived from OrigUWR
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterField(
+            self.unit_id, self.tr('Input unit id field, column has text like u-2-002'), 'unit_id', self.origUWR))
+
+        self.addParameter(QgsProcessingParameterField(
+            self.unit_id_no, self.tr('Input unit id number field, column has text like Mg-059'), 'unit_id',
+            self.origUWR))
+        # ===========================================================================
+        # gpx - Input Folder
+        # will loop through all the gpx files under the folder
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterFile(
+            self.gpxFolder, self.tr('Input gpx folder'), QgsProcessingParameterFile.Folder))
+        # ===========================================================================
+        # DEM
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterRasterLayer(
+            self.DEM, self.tr('Input the project DEM')))
+        # ===========================================================================
+        # viewshed
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterFeatureSource(
+            self.viewshed, self.tr('Existed viewshed'), [QgsProcessing.TypeVectorPolygon]))
+        self.addParameter(QgsProcessingParameterFeatureSource(
+            self.minElevViewshed, self.tr('Existed minElevViewshed'), [QgsProcessing.TypeVectorPolygon]))
+
+        # ===========================================================================
+        # bufferDistIS_high/moderate/low - Input string, with default value 500/1000/1500
+        # three buffer range represents different incursion severity range
+        # ===========================================================================
+        self.addParameter(QgsProcessingParameterString(
+            self.buffDistIS_high, self.tr('Buffer distance - High Incursion Severity'), 500))
+
+        self.addParameter(QgsProcessingParameterString(
+            self.buffDistIS_moderate, self.tr('Buffer distance - Moderate Incursion Severity'), 1000))
+
+        self.addParameter(QgsProcessingParameterString(
+            self.buffDistIS_low, self.tr('Buffer distance - Low Incursion Severity'), 1500))
+
+
+    def processAlgorithm(self, parameters, context, feedback):
+        """
+        Here is where the processing itself takes place.
+        """
+        # Retrieve the feature source and sink. The 'dest_id' variable is used
+        # to uniquely identify the feature sink, and must be included in the
+        # dictionary returned by the processAlgorithm function.
+        projectFolder = parameters['projectFolder']
+        LOS_finalPoints = parameters['LOS_finalPoints']
+        statsPath = os.path.join(projectFolder, 'finalPointsStats')
+        delFolder = os.path.join(projectFolder, 'delFolder')
+        # ===========================================================================
+        # Check if the delFolder exists, and delete it if found
+        # ===========================================================================
+        if os.path.exists(delFolder):
+            try:
+                shutil.rmtree(delFolder)
+                os.mkdir(delFolder)
+            except:
+                feedback.setProgressText('unable to delete delFolder')
+        else:
+            os.mkdir(delFolder)
+
+        try:
+            # ==============================================================
+            # unit_no, eg. u-2-002
+            # unit_no_id, eg. Mg-106
+            # unit_unique_field, field that combines uwr number and uwr unit number
+            # ==============================================================
+            unit_no = "UWR_NUMBER"
+            unit_no_id = "UWR_UNIT_NUMBER"
+            uwr_unique_Field = "uwr_unique"
+
+            feedback.setProgressText('---Process completed successfully---')
+
+        except QgsException as e:
+            feedback.setProgressText('Something is wrong')
+            feedback.setProgressText(f'{e}')
+
+        finally:
+            feedback.setProgressText('Completed')
+
+
+        total = 100.0 / lyr.featureCount() if lyr.featureCount() else 0
+        features = lyr.getFeatures()
+
+        for current, feature in enumerate(features):
+            # Stop the algorithm if cancel button has been clicked
+            if feedback.isCanceled():
+                break
+
+            # Update the progress bar
+            feedback.setProgress(int(current * total))
+
+        # Return the results of the algorithm. In this case our only result is
+        # the feature sink which contains the processed features, but some
+        # algorithms may return multiple feature sinks, calculated numeric
+        # statistics, etc. These should all be included in the returned
+        # dictionary, with keys matching the feature corresponding parameter
+        # or output names.
+
+        return None
+
+    def name(self):
+        """
+        Returns the algorithm name, used for identifying the algorithm. This
+        string should be fixed for the algorithm, and must not be localised.
+        The name should be unique within each provider. Names should contain
+        lowercase alphanumeric characters only and no spaces or other
+        formatting characters.
+        """
+        return 'WHOLE PROCESS - Flightpath Analysis'
+
+    def displayName(self):
+        """
+        Returns the translated algorithm name, which should be used for any
+        user-visible display of the algorithm name.
+        """
+        return self.tr(self.name())
+
+    def group(self):
+        """
+        Returns the name of the group this algorithm belongs to. This string
+        should be localised.
+        """
+        return self.tr(self.groupId())
+
+    def groupId(self):
+        """
+        Returns the unique ID of the group this algorithm belongs to. This
+        string should be fixed for the algorithm, and must not be localised.
+        The group id should be unique within each provider. Group id should
+        contain lowercase alphanumeric characters only and no spaces or other
+        formatting characters.
+        """
+        return '2023_Project'
+
+    def tr(self, string):
+        return QCoreApplication.translate('Processing', string)
+
+    def createInstance(self):
+        return flightPathAnalysis()
