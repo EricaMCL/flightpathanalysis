@@ -1539,8 +1539,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
                 else:
                     terrainMaskPoi = ','.join(points_aglViewshed_NumSet)
                     finalSQL = "ID NOT IN (" + terrainMaskPoi + ")"
-
-                uwr_notmasked_selected = processing.run("native:extractbyexpression",
+                    uwr_notmasked_selected = processing.run("native:extractbyexpression",
                                                         {'EXPRESSION': finalSQL,
                                                          'INPUT': poisAglViewshed,
                                                          'OUTPUT': os.path.join(delFolder, uwr_notmasked)})['OUTPUT']
