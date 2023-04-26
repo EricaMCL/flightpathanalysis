@@ -223,11 +223,43 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
     # ==============================================================
     # Get DEM of vertices
     # ==============================================================
-    UWRVertices_Lyr = processing.run("sagang:addrastervaluestopoints",
-                             {'SHAPES': UWRVertices,
+    UWRVertices_temp = processing.run("native:joinattributesbylocation", {
+        'INPUT': UWRVertices,
+        'PREDICATE': [0],
+        'JOIN': simplifyUWR,
+        'JOIN_FIELDS': [], 'METHOD': 0, 'DISCARD_NONMATCHING': False, 'PREFIX': '',
+        'OUTPUT':'TEMPORARY_OUTPUT'})['OUTPUT']
+
+    UWRVertices_Lyr_temp = processing.run("sagang:addrastervaluestopoints",
+                             {'SHAPES': UWRVertices_temp,
                               'GRIDS': [DEM],
-                              'RESULT': os.path.join(tempFolder, 'verticesLyr'),
+                              'RESULT':'TEMPORARY_OUTPUT',
                               'RESAMPLING': 3})['RESULT']
+
+    UWRVertices_Lyr = processing.run("native:refactorfields", {'INPUT': UWRVertices_Lyr_temp,
+                                             'FIELDS_MAPPING': [
+                                                 {'expression': '"ID_POINT"', 'length': 16, 'name': 'ID_POINT',
+                                                  'precision': 0, 'sub_type': 0, 'type': 4, 'type_name': 'int8'},
+                                                 {'expression': '"UWR_"', 'length': 16, 'name': 'UWR_', 'precision': 0,
+                                                  'sub_type': 0, 'type': 4, 'type_name': 'int8'},
+                                                 {'expression': '"UWR_ID"', 'length': 16, 'name': 'UWR_ID',
+                                                  'precision': 0, 'sub_type': 0, 'type': 4, 'type_name': 'int8'},
+                                                 {'expression': '"TUWR_TAG"', 'length': 7, 'name': 'TUWR_TAG',
+                                                  'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                 {'expression': '"WHO_CREATE"', 'length': 7, 'name': 'WHO_CREATE',
+                                                  'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                 {'expression': '"UNIT_NO"', 'length': 6, 'name': 'UNIT_NO',
+                                                  'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                 {'expression': '"uwr_unique"', 'length': 15, 'name': 'uwr_unique',
+                                                  'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                 {'expression': '"BUFF_DIST"', 'length': 18, 'name': 'BUFF_DIST',
+                                                  'precision': 10, 'sub_type': 0, 'type': 6,
+                                                  'type_name': 'double precision'},
+                                                 {'expression': '"bcelevation"', 'length': 18, 'name': 'bcelevation',
+                                                  'precision': 10, 'sub_type': 0, 'type': 6,
+                                                  'type_name': 'double precision'}], 'OUTPUT':os.path.join(tempFolder, 'verticesLyr')})['OUTPUT']
+
+
 
 
     # ==============================================================
@@ -341,7 +373,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                                             'OUTPUT': os.path.join(tempFolder, UWR_DEMPoints)})
 
         vertice_Selected = processing.run("native:extractbyexpression",
-                                            {'EXPRESSION': expression + " and (BUFF_DIST = 0)",
+                                            {'EXPRESSION': expression,
                                              'INPUT': UWRVertices_Lyr,
                                              'OUTPUT': os.path.join(tempFolder, f'uwrSelected_{name_uwr}')})['OUTPUT']
 
@@ -351,7 +383,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         vertice_Selected_lyr = QgsVectorLayer((vertice_Selected), "", "ogr")
         minValue = 9999
         for feature in vertice_Selected_lyr.getFeatures():
-            DEMvalue = feature.attributes()[1]
+            DEMvalue = feature.attributes()[-1]
             if DEMvalue < minValue and not None:
                 minValue = DEMvalue
 
@@ -374,32 +406,32 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         viewPoints = processing.run("visibility:createviewpoints", {
             'OBSERVER_POINTS': UWRVertices_merge,
             'DEM': demClipped, 'OBSERVER_ID': '',
-            'RADIUS': 1500, 'RADIUS_FIELD': '', 'OBS_HEIGHT': 1.6, 'OBS_HEIGHT_FIELD': 'ele', 'TARGET_HEIGHT': 0,
+            'RADIUS': 1500, 'RADIUS_FIELD': '', 'OBS_HEIGHT': 1.6, 'OBS_HEIGHT_FIELD': 'bcelevation', 'TARGET_HEIGHT': 0,
             'TARGET_HEIGHT_FIELD': '', 'RADIUS_IN_FIELD': '', 'AZIM_1_FIELD': '', 'AZIM_2_FIELD': '',
-            'ANGLE_UP_FIELD': '', 'ANGLE_DOWN_FIELD': '', 'OUTPUT': 'TEMPORARY_OUTPUT'})
+            'ANGLE_UP_FIELD': '', 'ANGLE_DOWN_FIELD': '', 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
         rasViewshed = processing.run("visibility:viewshed",
                                   {'ANALYSIS_TYPE':0,
                                    'OBSERVER_POINTS':viewPoints,
                                    'DEM':demClipped,
-                                   'USE_CURVATURE':False,'REFRACTION':0.13,'OPERATOR':0,'OUTPUT':os.path.join(tempFolder, rasterViewshed)})
+                                   'USE_CURVATURE':False,'REFRACTION':0.13,'OPERATOR':0,'OUTPUT':os.path.join(tempFolder, rasterViewshed + '.tif')})['OUTPUT']
 
         agl_rasViewshed = processing.run("visibility:viewshed",
                               {'ANALYSIS_TYPE': 1,
                                'OBSERVER_POINTS': viewPoints,
                                'DEM': demClipped,
-                               'USE_CURVATURE': False, 'REFRACTION': 0.13, 'OPERATOR': 0, 'OUTPUT': os.path.join(tempFolder,agl_rasterViewshed)})
+                               'USE_CURVATURE': False, 'REFRACTION': 0.13, 'OPERATOR': 0, 'OUTPUT': os.path.join(tempFolder,agl_rasterViewshed + '.tif')})['OUTPUT']
 
         rasToPoly = processing.run("native:pixelstopolygons",
                        {'INPUT_RASTER': rasViewshed,
-                        'RASTER_BAND': 1, 'FIELD_NAME': 'VALUE', 'OUTPUT': os.path.join(tempFolder, polygonViewshed)})
+                        'RASTER_BAND': 1, 'FIELD_NAME': 'VALUE', 'OUTPUT': os.path.join(tempFolder, polygonViewshed)})['OUTPUT']
 
         # ==============================================================
         # Select all direct viewshed area (visible area)
         # ==============================================================
         selectRasToPoly = processing.run("native:extractbyexpression", {
             'INPUT': rasToPoly,
-            'EXPRESSION': 'VALUE <> 0', 'OUTPUT': 'TEMPORARY_OUTPUT'})
+            'EXPRESSION': 'VALUE <> 0', 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
         polyMergeUWR = processing.run("native:mergevectorlayers",
                                            {'LAYERS': [UWR_Buffer_selected_orig, selectRasToPoly],
