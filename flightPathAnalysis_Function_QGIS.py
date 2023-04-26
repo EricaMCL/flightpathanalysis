@@ -371,11 +371,44 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         # ==============================================================
         # Make raster viewshed
         # ==============================================================
+        viewPoints = processing.run("visibility:createviewpoints", {
+            'OBSERVER_POINTS': UWRVertices_merge,
+            'DEM': demClipped, 'OBSERVER_ID': '',
+            'RADIUS': 1500, 'RADIUS_FIELD': '', 'OBS_HEIGHT': 1.6, 'OBS_HEIGHT_FIELD': 'ele', 'TARGET_HEIGHT': 0,
+            'TARGET_HEIGHT_FIELD': '', 'RADIUS_IN_FIELD': '', 'AZIM_1_FIELD': '', 'AZIM_2_FIELD': '',
+            'ANGLE_UP_FIELD': '', 'ANGLE_DOWN_FIELD': '', 'OUTPUT': 'TEMPORARY_OUTPUT'})
 
+        rasViewshed = processing.run("visibility:viewshed",
+                                  {'ANALYSIS_TYPE':0,
+                                   'OBSERVER_POINTS':viewPoints,
+                                   'DEM':demClipped,
+                                   'USE_CURVATURE':False,'REFRACTION':0.13,'OPERATOR':0,'OUTPUT':os.path.join(tempFolder, rasterViewshed)})
 
+        agl_rasViewshed = processing.run("visibility:viewshed",
+                              {'ANALYSIS_TYPE': 1,
+                               'OBSERVER_POINTS': viewPoints,
+                               'DEM': demClipped,
+                               'USE_CURVATURE': False, 'REFRACTION': 0.13, 'OPERATOR': 0, 'OUTPUT': os.path.join(tempFolder,agl_rasterViewshed)})
 
+        rasToPoly = processing.run("native:pixelstopolygons",
+                       {'INPUT_RASTER': rasViewshed,
+                        'RASTER_BAND': 1, 'FIELD_NAME': 'VALUE', 'OUTPUT': os.path.join(tempFolder, polygonViewshed)})
 
+        # ==============================================================
+        # Select all direct viewshed area (visible area)
+        # ==============================================================
+        selectRasToPoly = processing.run("native:extractbyexpression", {
+            'INPUT': rasToPoly,
+            'EXPRESSION': 'VALUE <> 0', 'OUTPUT': 'TEMPORARY_OUTPUT'})
 
+        polyMergeUWR = processing.run("native:mergevectorlayers",
+                                           {'LAYERS': [UWR_Buffer_selected_orig, selectRasToPoly],
+                                            'CRS': None,
+                                            'OUTPUT': os.path.join(tempFolder, totalViewshed)})['OUTPUT']
+
+        polyMergeUWR_dis = processing.run("native:dissolve", {'INPUT':polyMergeUWR,
+                                                              'FIELD':[],'SEPARATE_DISJOINT':False,
+                                                              'OUTPUT':os.path.join(tempFolder, totalViewshed_dis)})
 
 
 
