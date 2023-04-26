@@ -1387,7 +1387,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
             # ==============================================================
             unit_no = parameters['unit_id']
             unit_no_id = parameters['unit_id_no']
-            uwr_unique_Field = 'uwr_unique'
+            uwr_unique_Field = 'uwr_unique_id'
 
             # ==============================================================
             # Get list of relevant UWR
@@ -1425,8 +1425,9 @@ class LOS_analysis(QgsProcessingAlgorithm):
             # ==============================================================
             if len(UWRRequireViewshedSet) > 0:
                 maxBuffRange = 1500
-                feedback.setProgressText(f'No existed viewshed layer')
+                feedback.setProgressText(f'MAKING viewshed layer')
                 ext = makeViewshed(UWRRequireViewshedSet, uwrBuffered, maxBuffRange, unit_no, unit_no_id, uwr_unique_Field, delFolder, DEM, existedViewshed, existedMinElevViewshed)
+                feedback.setProgressText(f'{ext}')
                 feedback.setProgressText(f'{UWRRequireViewshedSet}')
 
             else:
