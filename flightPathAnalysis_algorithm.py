@@ -1337,9 +1337,9 @@ class LOS_analysis(QgsProcessingAlgorithm):
         # viewshed
         # ===========================================================================
         self.addParameter(QgsProcessingParameterFeatureSource(
-            self.viewshed, self.tr('Existed viewshed'), [QgsProcessing.TypeVectorPolygon]))
+            self.viewshed, self.tr('Existed viewshed'), [QgsProcessing.TypeVectorPolygon], optional=True))
         self.addParameter(QgsProcessingParameterFeatureSource(
-            self.minElevViewshed, self.tr('Existed minElevViewshed'), [QgsProcessing.TypeVectorPolygon]))
+            self.minElevViewshed, self.tr('Existed minElevViewshed'), [QgsProcessing.TypeVectorPolygon],  optional=True))
 
 
 
@@ -1424,10 +1424,10 @@ class LOS_analysis(QgsProcessingAlgorithm):
             # Create viewshed for uwr that doesn't have any. Either makes a new final viewshed or appends to the old one
             # ==============================================================
             if len(UWRRequireViewshedSet) > 0:
+                maxBuffRange = 1500
                 feedback.setProgressText(f'No existed viewshed layer')
-                #ext = makeViewshed(UWRRequireViewshedSet, uwrBuffered, maxBuffRange, unit_no, unit_no_id, uwr_unique_Field, delFolder, DEM, existedViewshed, existedMinElevViewshed)
+                ext = makeViewshed(UWRRequireViewshedSet, uwrBuffered, maxBuffRange, unit_no, unit_no_id, uwr_unique_Field, delFolder, DEM, existedViewshed, existedMinElevViewshed)
                 feedback.setProgressText(f'{UWRRequireViewshedSet}')
-                exit()
 
             else:
                 feedback.setProgressText('No need to make viewsheds')
@@ -1534,7 +1534,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
                 feedback.setProgressText(f'points_aglViewshed_NumSet: {points_aglViewshed_NumSet}')
 
                 if len(points_aglViewshed_NumSet) == 0:
-                        finalSQL = None
+                    finalSQL = None
 
                 else:
                     terrainMaskPoi = ','.join(points_aglViewshed_NumSet)
