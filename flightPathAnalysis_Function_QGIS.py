@@ -274,6 +274,8 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
     # ==============================================================
     #
     # ==============================================================
+    viewshedList = []
+    minElevViewshedList = []
     for uwr in uwrList:
         uwrstarttime = datetime.datetime.now()
         name_uwr = replaceNonAlphaNum(uwr, "_")
@@ -422,7 +424,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                'DEM': demClipped,
                                'USE_CURVATURE': False, 'REFRACTION': 0.13, 'OPERATOR': 0, 'OUTPUT': os.path.join(tempFolder,agl_rasterViewshed + '.tif')})['OUTPUT']
 
-        rasToPoly = processing.run("native:pixelstopolygons",
+        viewshedRasToPoly = processing.run("native:pixelstopolygons",
                        {'INPUT_RASTER': rasViewshed,
                         'RASTER_BAND': 1, 'FIELD_NAME': 'VALUE', 'OUTPUT': os.path.join(tempFolder, polygonViewshed)})['OUTPUT']
 
@@ -430,7 +432,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         # Select all direct viewshed area (visible area)
         # ==============================================================
         selectRasToPoly = processing.run("native:extractbyexpression", {
-            'INPUT': rasToPoly,
+            'INPUT': viewshedRasToPoly,
             'EXPRESSION': 'VALUE <> 0', 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
         polyMergeUWR = processing.run("native:mergevectorlayers",
@@ -441,8 +443,17 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         polyMergeUWR_dis = processing.run("native:dissolve", {'INPUT':polyMergeUWR,
                                                               'FIELD':[],'SEPARATE_DISJOINT':False,
                                                               'OUTPUT':os.path.join(tempFolder, totalViewshed_dis)})
+        viewshedList.append(polyMergeUWR_dis)
 
+        agl_rasViewshedRasToPoly = processing.run("native:pixelstopolygons",
+                                   {'INPUT_RASTER': agl_rasViewshed,
+                                    'RASTER_BAND': 1, 'FIELD_NAME': 'VALUE',
+                                    'OUTPUT': os.path.join(tempFolder, polygon_aglViewshed)})['OUTPUT']
 
+        agl_rasViewshed_dis = processing.run("native:dissolve", {'INPUT':polyMergeUWR,
+                                                              'FIELD':[],'SEPARATE_DISJOINT':False,
+                                                              'OUTPUT':os.path.join(tempFolder, dissolved_aglViewshed)})['OUTPUT']
+        minElevViewshedList.append(agl_rasViewshed_dis)
 
     return [minValue]
 
