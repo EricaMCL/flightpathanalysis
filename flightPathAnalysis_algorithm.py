@@ -1925,10 +1925,28 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
         origUWR_source = self.parameterAsSource(parameters, self.origUWR, context)
         origUWR = parameters['origUWR']
         projectFolder = parameters['projectFolder']
-        feedback.setProgressText(str(origUWR))
-        uwrBufferedPath = os.path.join(projectFolder, 'uwrBuffered')
+        gpxFolder = parameters['gpxFolder']
+        DEM = parameters['DEM']
+        existedViewshed = parameters['viewshed']
+        existedMinElevViewshed = parameters['minElevViewshed']
+        bufferDistList = [int(parameters['buffDistIS_high']), int(parameters['buffDistIS_moderate']),
+                          int(parameters['buffDistIS_low'])]
+
+        # ==============================================================
+        # Result layer path
+        # ==============================================================
         delFolder = os.path.join(projectFolder, 'delFolder')
+        uwrBufferedPath = os.path.join(projectFolder, 'uwrBuffered')
+        # ==============================================================
+        # unit_no, eg. u-2-002
+        # unit_no_id, eg. Mg-106
+        # unit_unique_field, field that combines uwr number and uwr unit number
+        # ==============================================================
+        unit_no = parameters['unit_id']
+        unit_no_id = parameters['unit_id_no']
+        uwr_unique_Field = "uwr_unique_id"
         final = None
+
 
         if os.path.exists(delFolder):
             try:
@@ -1953,14 +1971,6 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             else:
                 os.mkdir(delFolder)
 
-            # ==============================================================
-            # unit_no, eg. u-2-002
-            # unit_no_id, eg. Mg-106
-            # unit_unique_field, field that combines uwr number and uwr unit number
-            # ==============================================================
-            unit_no = parameters['unit_id']
-            unit_no_id = parameters['unit_id_no']
-            uwr_unique_Field = "uwr_unique_id"
 
             bufferDistList = [int(parameters['buffDistIS_high']), int(parameters['buffDistIS_moderate']),
                               int(parameters['buffDistIS_low'])]
