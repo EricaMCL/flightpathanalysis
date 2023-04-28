@@ -466,8 +466,12 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
             'JOIN': UWR_Buffer_selected,
             'JOIN_FIELDS': [], 'METHOD': 0, 'DISCARD_NONMATCHING': False, 'PREFIX': '', 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
+        agl_rasViewshed_drop = processing.run("native:deletecolumn", {
+            'INPUT': agl_rasViewshed_join,
+            'COLUMN': ['fid'], 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+
         agl_rasViewshed_clip = processing.run("native:clip",
-                                              {'INPUT': agl_rasViewshed_join,
+                                              {'INPUT': agl_rasViewshed_drop,
                                                'OVERLAY': UWR_Buffer_selected,
                                                'OUTPUT':os.path.join(tempFolder, dissolved_aglViewshed)})['OUTPUT']
 
