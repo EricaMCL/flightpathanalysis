@@ -275,7 +275,11 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
     #
     # ==============================================================
     viewshedList = []
+    viewshed_delPath = []
     minElevViewshedList = []
+    minElevViewshed_delPath = []
+
+
     for uwr in uwrList:
         uwrstarttime = datetime.datetime.now()
         name_uwr = replaceNonAlphaNum(uwr, "_")
@@ -443,19 +447,44 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         polyMergeUWR_dis = processing.run("native:dissolve", {'INPUT':polyMergeUWR,
                                                               'FIELD':[],'SEPARATE_DISJOINT':False,
                                                               'OUTPUT':os.path.join(tempFolder, totalViewshed_dis)})
-        viewshedList.append(polyMergeUWR_dis)
+
+        viewshedList.append(polyMergeUWR_dis + '.gpkg|layername=' + totalViewshed_dis)
+        viewshed_delPath.append(viewshedList + '.gpkg')
 
         agl_rasViewshedRasToPoly = processing.run("native:pixelstopolygons",
                                    {'INPUT_RASTER': agl_rasViewshed,
                                     'RASTER_BAND': 1, 'FIELD_NAME': 'VALUE',
                                     'OUTPUT': os.path.join(tempFolder, polygon_aglViewshed)})['OUTPUT']
 
-        agl_rasViewshed_dis = processing.run("native:dissolve", {'INPUT':polyMergeUWR,
+        agl_rasViewshed_dis = processing.run("native:dissolve", {'INPUT':agl_rasViewshedRasToPoly,
                                                               'FIELD':[],'SEPARATE_DISJOINT':False,
-                                                              'OUTPUT':os.path.join(tempFolder, dissolved_aglViewshed)})['OUTPUT']
-        minElevViewshedList.append(agl_rasViewshed_dis)
+                                                              'OUTPUT':'TEMPORARY_OUTPUT'})['OUTPUT']
 
-    return [minValue]
+        agl_rasViewshed_intersect = processing.run("native:intersection", {
+            'INPUT': agl_rasViewshed_dis,
+            'OVERLAY': UWR_Buffer_selected, 'INPUT_FIELDS': [],
+            'OVERLAY_FIELDS': [unit_no, unit_no_id, uwr_unique_Field], 'OVERLAY_FIELDS_PREFIX': '',
+            'OUTPUT': os.path.join(tempFolder, dissolved_aglViewshed), 'GRID_SIZE': None})
+
+        minElevViewshedList.append(agl_rasViewshed_intersect + '.gpkg|layername=' + dissolved_aglViewshed)
+        minElevViewshed_delPath.append(minElevViewshedList + '.gpkg')
+
+    projectFolder = os.path.split(tempFolder)[0]
+    viewshed_final = processing.run("native:mergevectorlayers", {'LAYERS': minElevViewshedList,
+                                                         'OUTPUT': os.path.join(projectFolder, 'viewshed')})['OUTPUT']
+    minElevViewshed_final = processing.run("native:mergevectorlayers", {'LAYERS': minElevViewshedList,
+                                                         'OUTPUT': os.path.join(projectFolder, 'minElevViewshed')})['OUTPUT']
+
+    for feature in viewshed_delPath or minElevViewshed_delPath:
+        try:
+            os.remove(feature)
+        except:
+            continue
+
+
+
+
+    return [viewshed_final, minElevViewshed_final]
 
 
 

@@ -1410,7 +1410,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
             if existedViewshed != None:
                 viewshed_source = self.parameterAsSource(parameters, self.viewshed, context)
                 viewshedFieldList = viewshed_source.fields().names()
-                uwr_unique_Field_index = viewshedFieldList.index('uwr_unique')
+                uwr_unique_Field_index = viewshedFieldList.index(uwr_unique_Field)
                 feedback.setProgressText(f'{uwr_unique_Field_index}')
                 for feature in viewshed_source.getFeatures():
                     uwr_unique_Field_value = f'{feature.attributes()[uwr_unique_Field_index]}'
@@ -1423,14 +1423,20 @@ class LOS_analysis(QgsProcessingAlgorithm):
             # ==============================================================
             # Create viewshed for uwr that doesn't have any. Either makes a new final viewshed or appends to the old one
             # ==============================================================
+            viewshed = None
+            minElevViewshed = None
             if len(UWRRequireViewshedSet) > 0:
                 maxBuffRange = 1500
                 feedback.setProgressText(f'MAKING viewshed layer')
-                ext = makeViewshed(UWRRequireViewshedSet, uwrBuffered, maxBuffRange, unit_no, unit_no_id, uwr_unique_Field, delFolder, DEM, existedViewshed, existedMinElevViewshed)
-                feedback.setProgressText(f'{ext}')
+                viewshedCreated = makeViewshed(UWRRequireViewshedSet, uwrBuffered, maxBuffRange, unit_no, unit_no_id, uwr_unique_Field, delFolder, DEM, existedViewshed, existedMinElevViewshed)
+                feedback.setProgressText(f'{viewshedCreated}')
                 feedback.setProgressText(f'{UWRRequireViewshedSet}')
+                viewshed = viewshedCreated[0]
+                minElevViewshed = viewshedCreated[1]
 
             else:
+                viewshed = existedViewshed
+                minElevViewshed = existedMinElevViewshed
                 feedback.setProgressText('No need to make viewsheds')
 
             # ==============================================================
@@ -1464,7 +1470,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
                 # ==============================================================
                 # Check to find the right query depending on if uwr fields are integer or text
                 # ==============================================================
-                minElevViewshedLyr = QgsVectorLayer((existedMinElevViewshed), "", "ogr")
+                minElevViewshedLyr = QgsVectorLayer((minElevViewshed), "", "ogr")
                 expression = None
                 for feature in minElevViewshedLyr.getFeatures():
                     minElevViewshedLyr_fields = minElevViewshedLyr.fields().names()
@@ -1486,7 +1492,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
                     break
 
                 minElevViewshedLyr_selected = processing.run("native:extractbyexpression",
-                                                     {'EXPRESSION': expression + " AND (gridcode <> 0)",
+                                                     {'EXPRESSION': expression + " AND (VALUE <> 0)",
                                                       'INPUT': minElevViewshedLyr,
                                                       'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
                 feedback.setProgressText(f'minElevViewshed_Lyr_selected')
@@ -1495,7 +1501,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
                                                      {'EXPRESSION': expression,
                                                       'INPUT': allFlightPoints,
                                                       'OUTPUT': os.path.join(delFolder, 'uwrFlightPoints_selected')})['OUTPUT']
-                feedback.setProgressText(f'uwrFlightPoints_selected')
+                feedback.setProgressText(f'{uwrFlightPoints_selected}')
                 # ==============================================================
                 # all flight points associated with the UWR
                 # ==============================================================
@@ -1528,9 +1534,9 @@ class LOS_analysis(QgsProcessingAlgorithm):
                     fid_attribute = feature.attributes()[fidIndex]
                     aglIndex = poisAglViewshedLyr_fields.index('AGL')
                     agl_attribute = feature.attributes()[aglIndex]
-                    gridcodeIndex = poisAglViewshedLyr_fields.index('gridcode')
-                    gridcode_attribute = feature.attributes()[gridcodeIndex]
-                    if gridcode_attribute is not None and agl_attribute < gridcode_attribute:
+                    valueIndex = poisAglViewshedLyr_fields.index('VALUE')
+                    value_attribute = feature.attributes()[valueIndex]
+                    if value_attribute is not None and agl_attribute < value_attribute:
                         points_aglViewshed_NumSet.add(str(fid_attribute))
                 feedback.setProgressText(f'points_aglViewshed_NumSet: {points_aglViewshed_NumSet}')
 
@@ -1565,7 +1571,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
             # Get count of points that are in direct viewshed
             # ==============================================================
             LOS_uwrFlightPoints_selected = processing.run("native:extractbyexpression",
-                                                    {'EXPRESSION': " gridcode is Null ",
+                                                    {'EXPRESSION': " VALUE is Null ",
                                                      'INPUT': nonTerrainMaskedPoi_merge,
                                                      'OUTPUT': os.path.join(delFolder, 'LOS_uwrFlightPoints_selected')})['OUTPUT']
 
