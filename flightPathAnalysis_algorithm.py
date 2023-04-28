@@ -1929,13 +1929,16 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
         DEM = parameters['DEM']
         existedViewshed = parameters['viewshed']
         existedMinElevViewshed = parameters['minElevViewshed']
-        bufferDistList = [int(parameters['buffDistIS_high']), int(parameters['buffDistIS_moderate']),
+        bufferDistList = [int(0),int(parameters['buffDistIS_high']), int(parameters['buffDistIS_moderate']),
                           int(parameters['buffDistIS_low'])]
+        incursionSeverity = {int(0): "In UWR", int(parameters['buffDistIS_high']): "High", int(parameters['buffDistIS_moderate']): "Moderate",
+                          int(parameters['buffDistIS_low']): "Low"}
 
         # ==============================================================
         # Result layer path
         # ==============================================================
         delFolder = os.path.join(projectFolder, 'delFolder')
+        uwrBuffered = None
         uwrBufferedPath = os.path.join(projectFolder, 'uwrBuffered')
         # ==============================================================
         # unit_no, eg. u-2-002
@@ -1958,10 +1961,10 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             os.mkdir(delFolder)
 
 
+        # ===========================================================================
+        # Step.1 Create uwrBuffered layer
+        # ===========================================================================
         try:
-            # ===========================================================================
-            # Step.1 Create uwrBuffered layer
-            # ===========================================================================
             if os.path.exists(delFolder):
                 try:
                     shutil.rmtree(delFolder)
@@ -1979,8 +1982,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             # ===========================================================================
             # Check if the input vector includes invalid geometry
             # ===========================================================================
-            result = processing.run("qgis:checkvalidity", {
-                'INPUT_LAYER': parameters['origUWR']})
+            result = processing.run("qgis:checkvalidity", {'INPUT_LAYER': origUWR})
             errorCount = result['ERROR_COUNT']
             feedback.setProgressText(str(errorCount))
 
@@ -1988,19 +1990,14 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             # Fix the input geometry if invalid found, and replace the input for further process
             # ===========================================================================
             if errorCount > 0:
-                fixGeom = processing.run("native:fixgeometries",
-                                         {'INPUT': parameters['origUWR'],
-                                          'OUTPUT': 'TEMPORARY_OUTPUT'})
+                fixGeom = processing.run("native:fixgeometries",{'INPUT': origUWR, 'OUTPUT': 'TEMPORARY_OUTPUT'})
                 feedback.setProgressText('Geometry fixed')
                 origUWR = fixGeom['OUTPUT']
 
             else:
-                fixGeom = processing.run("native:fixgeometries",
-                                         {'INPUT': parameters['origUWR'],
-                                          'OUTPUT': 'TEMPORARY_OUTPUT'})
+                fixGeom = processing.run("native:fixgeometries",{'INPUT': parameters['origUWR'], 'OUTPUT': 'TEMPORARY_OUTPUT'})
                 feedback.setProgressText('Geometry fixed')
                 origUWR = fixGeom['OUTPUT']
-
 
             # ==============================================================
             # Get list of relevant UWR
@@ -2190,18 +2187,20 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                 # ==============================================================
                 # Append uwr into the final geopackage or create a new one
                 # ==============================================================
+
                 if uwrBuffered_exist:
                     requireMergeBufferList.append(uwrBuffered_layer)
-                    final = processing.run("native:mergevectorlayers",
+                    uwrBuffered = processing.run("native:mergevectorlayers",
                                            {'LAYERS': requireMergeBufferList,
                                             'OUTPUT': uwrBufferedPath + '_updated'})['OUTPUT']
                     os.remove(uwrBufferedPath + '.gpkg')
                     os.rename(final, uwrBufferedPath + '.gpkg')
                     feedback.setProgressText('final geopackage exists')
                 else:
-                    final = processing.run("native:mergevectorlayers",
+                    uwrBuffered = processing.run("native:mergevectorlayers",
                                            {'LAYERS': requireMergeBufferList,
                                             'OUTPUT': uwrBufferedPath})['OUTPUT']
+
                     for f in requireMergeBufferList:
                         feedback.setProgressText(f'{f} merged')
 
@@ -2216,6 +2215,468 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
         finally:
             #shutil.rmtree(delFolder)
             #feedback.setProgressText(f'{delFolder} deleted')
+            feedback.setProgressText('Completed')
+
+        # ===========================================================================
+        # Step.2 Flightpath conversion
+        # ===========================================================================
+        try:
+            # ==============================================================
+            # Create variables for converting all gpx files into fc
+            # timeIntervalDict - dictionary of different time intervals and the flight points in each
+            # flightLines - lists of flight lines
+            # flightCount - count of flight lines
+            # totalSeasonTime- total flight time in the season
+            # checkFilesList - checkFilesList
+            # ==============================================================
+            timeIntervalDict = {}
+            flightLines = []
+            flightCount = 0
+            totalSeasonTime = 0
+            checkFilesList = []
+
+            # ===========================================================================
+            # Loop through the input GPX folder
+            # ===========================================================================
+            gpxFiles = glob.glob(os.path.join(gpxFolder, "*.gpx"))
+            gpxTemps = []
+
+            # ===========================================================================
+            # Get the row count of each GPX file, and the required information from different layers
+            # ===========================================================================
+            for gpxFile in gpxFiles:
+                flightCount += 1
+                feedback.setProgressText(f'{str(flightCount)}: {str(gpxFile)}')
+                gpxFormattedName = replaceNonAlphaNum(Path(gpxFile).stem, '_')
+                feedback.setProgressText(f'{gpxFormattedName}')
+
+                gpxDict = {'tkpt': '|layername=track_points', 'tkline': '|layername=tracks'}
+                rowCount = processing.run("qgis:basicstatisticsforfields",
+                                          {'INPUT_LAYER': gpxFile + gpxDict['tkpt'],
+                                           'FIELD_NAME': 'time',
+                                           'OUTPUT_HTML_FILE': 'TEMPORARY_OUTPUT'})['COUNT']
+                tkLyr = QgsVectorLayer((gpxFile + gpxDict['tkline']), "", "ogr")
+                tkLyrNameIndex = (tkLyr.fields().names()).index('name')
+                if tkLyrNameIndex != None:
+                    tkLyrFeatures = tkLyr.getFeatures()
+                    for feature in tkLyrFeatures:
+                        tkLyrName = str(feature.attributes()[tkLyrNameIndex])
+                        feedback.setProgressText(f'{tkLyrName}')
+                feedback.setProgressText(f'{rowCount}')
+
+                # ==============================================================
+                # Checks for files with consistent time intervals.
+                #  - All fc with same time intervals are grouped together in the dictionary
+                #  - If there are more than 2 rows
+                #       - find time between point recorded halfway through the flight and the point recorded right before it.
+                #       - else,time for objectid 3 - objectid 2 because there was an instance where there were 4 minutes between id 1 and 2.
+                #         assume only seconds between them the two points
+                # ==============================================================
+                tkptLyr_id = processing.run("native:fieldcalculator",
+                                            {'FIELD_LENGTH': 100,
+                                             'FIELD_NAME': 'OBJECTID',
+                                             'NEW_FIELD': True,
+                                             'FIELD_PRECISION': 0,
+                                             'FIELD_TYPE': 0,
+                                             'FORMULA': '@id',
+                                             'INPUT': gpxFile + gpxDict['tkpt'],
+                                             'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+                query = None
+                if int(rowCount) > 2:
+                    half = round(int(rowCount) / 2)
+                    sel = (half - 1, half)
+                    query = "OBJECTID in " + str(sel)
+                elif int(rowCount) == 2:
+                    half = round(int(rowCount) / 2)
+                    sel = (half - 1, half)
+                    query = "OBJECTID in (0,1)"
+                else:
+                    checkFilesList.append(gpxFile)
+                    continue
+
+                if query != None:
+                    tkptLyrExtracted = processing.run("native:extractbyexpression",
+                                                      {'EXPRESSION': query,
+                                                       'INPUT': tkptLyr_id,
+                                                       'OUTPUT': os.path.join(delFolder, 'tkptExtracted' + str(flightCount))})['OUTPUT']
+                    tkptLyr = QgsVectorLayer((tkptLyrExtracted), "", "ogr")
+                    tkptExtractedTimeIndex = (tkptLyr.fields().names()).index('time')
+                    features = tkptLyr.getFeatures()
+                    values = []
+                    # ==============================================================
+                    # Calculate the time interval and the totalFlightTime
+                    # ==============================================================
+                    for f in features:
+                        timeValue = f.attributes()[tkptExtractedTimeIndex]
+                        values.append(timeValue)
+                    timeInterval = values[1].toTime_t() - values[0].toTime_t()
+                    totalFlightTime = rowCount * timeInterval
+                    feedback.setProgressText(f'The total flight time of {gpxFormattedName} is {totalFlightTime} seconds')
+
+                # ===========================================================================
+                # Add the Name field from tracks layer to track points layer
+                # ===========================================================================
+                gpxTempPath = os.path.join(delFolder, 'temp_' + gpxFormattedName)
+                feedback.setProgressText(f'{gpxTempPath}')
+                gpxTemp_saved = processing.run("native:savefeatures",
+                                               {'INPUT': gpxFile + gpxDict['tkpt'],
+                                                'OUTPUT': 'TEMPORARY_OUTPUT',
+                                                'LAYER_NAME': '',
+                                                'DATASOURCE_OPTIONS': '',
+                                                'LAYER_OPTIONS': ''})['OUTPUT']
+
+                gpxField_name_new = processing.run("native:fieldcalculator",
+                                                   {'FIELD_LENGTH': 30,
+                                                    'FIELD_NAME': 'NameTkline',
+                                                    'NEW_FIELD': True,
+                                                    'FIELD_PRECISION': 0,
+                                                    'FIELD_TYPE': 2,
+                                                    'FORMULA': f"'{tkLyrName}'",
+                                                    'INPUT': gpxTemp_saved,
+                                                    'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+
+                # ===========================================================================
+                # Add the flightName field
+                # ===========================================================================
+                gpxField_flightName = processing.run("native:fieldcalculator",
+                                                     {'FIELD_LENGTH': 100,
+                                                      'FIELD_NAME': 'FlightName',
+                                                      'NEW_FIELD': True,
+                                                      'FIELD_PRECISION': 0,
+                                                      'FIELD_TYPE': 2,
+                                                      'FORMULA': f"'{gpxFormattedName}'",
+                                                      'INPUT': gpxField_name_new,
+                                                      'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+
+                # ===========================================================================
+                # Add the TotalTime field
+                # ===========================================================================
+                gpxTemp = processing.run("native:fieldcalculator",
+                                         {'FIELD_LENGTH': 100,
+                                          'FIELD_NAME': 'TotalTime',
+                                          'NEW_FIELD': True,
+                                          'FIELD_PRECISION': 2,
+                                          'FIELD_TYPE': 0,
+                                          'FORMULA': f"'{totalFlightTime}'",
+                                          'INPUT': gpxField_flightName,
+                                          'OUTPUT': gpxTempPath}, context=context, feedback=feedback)['OUTPUT']
+
+                gpxTemps.append(gpxTemp)
+
+                # ===========================================================================
+                # Create flight line
+                # ===========================================================================
+                flightLineName = gpxFormattedName + '__flightLine'
+                flightLinePath = os.path.join(delFolder, flightLineName)
+                flightline = processing.run("native:pointstopath",
+                                            {'INPUT': gpxTemp,
+                                             'CLOSE_PATH': False,
+                                             'ORDER_EXPRESSION': '',
+                                             'NATURAL_SORT': False,
+                                             'GROUP_EXPRESSION': '',
+                                             'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+
+                flightLineNameField = processing.run("native:fieldcalculator",
+                                                     {'FIELD_LENGTH': 100,
+                                                      'FIELD_NAME': 'Name',
+                                                      'NEW_FIELD': True,
+                                                      'FIELD_PRECISION': 0,
+                                                      'FIELD_TYPE': 2,
+                                                      'FORMULA': f"'{tkLyrName}'",
+                                                      'INPUT': flightline,
+                                                      'OUTPUT': flightLinePath})['OUTPUT']
+                flightLines.append(flightLineNameField + f'|layername={flightLineName}')
+                feedback.setProgressText(f'Flight Line: {flightLineNameField} appended')
+
+                # ===========================================================================
+                # Get season time sum
+                # ===========================================================================
+                totalSeasonTime += totalFlightTime
+                timeIntervalStr = "T" + replaceNonAlphaNum(str(timeInterval), "_")
+                if timeIntervalStr not in timeIntervalDict:
+                    timeIntervalDict[timeIntervalStr] = [timeInterval, [gpxTemp]]
+                else:
+                    timeIntervalDict[timeIntervalStr][1].append(gpxTemp)
+                feedback.setProgressText(f'===========================================')
+
+            # ===========================================================================
+            # Output the problem text to the gpx folder
+            # ===========================================================================
+            if len(checkFilesList) > 0:
+                problemGPXText = open(os.path.join(projectFolder, 'problemGPXFiles.txt'), "w")
+                for i in checkFilesList:
+                    problemGPXText.write(i + "\n")
+                problemGPXText.close()
+
+            feedback.setProgressText(f'Total season time : {totalSeasonTime}')
+            feedback.setProgressText(f'Total flight line {flightCount}')
+            feedback.setProgressText(f'Number of different time interval {len(timeIntervalDict)}')
+            feedback.setProgressText(f'{timeIntervalDict}')
+
+            # ===========================================================================
+            # Unprojected
+            # ===========================================================================
+            unprojectedGPX = []
+            for interval in timeIntervalDict:
+                gpxAllUnprojectedPath = os.path.join(delFolder, interval + '_All_unprojected')
+                gpxMergeUnprojected = processing.run("native:mergevectorlayers",
+                                                     {'LAYERS': timeIntervalDict[interval][1],
+                                                      'CRS': None,
+                                                      'OUTPUT': os.path.join(delFolder, 'mergeUnprojected')})['OUTPUT']
+
+                feedback.setProgressText(f'Merged all gpx file for {interval}')
+
+                # ===========================================================================
+                # Reproject GPX merge lyr, and create a dem extent to down the orig DEM
+                # ===========================================================================
+                gpxMergePprojected = processing.run("grass7:v.proj",
+                                                    {'input': gpxMergeUnprojected,
+                                                     'crs': QgsCoordinateReferenceSystem('EPSG:3005'),
+                                                     'smax': 10000, '-z': False, '-w': False,
+                                                     'output': os.path.join(delFolder, 'mergeProjected.gpkg'),
+                                                     'GRASS_REGION_PARAMETER': None,
+                                                     'GRASS_SNAP_TOLERANCE_PARAMETER': -1,
+                                                     'GRASS_MIN_AREA_PARAMETER': 0.0001,
+                                                     'GRASS_OUTPUT_TYPE_PARAMETER': 0,
+                                                     'GRASS_VECTOR_DSCO': '',
+                                                     'GRASS_VECTOR_LCO': '',
+                                                     'GRASS_VECTOR_EXPORT_NOCAT': False})['output']
+
+                gpxMergePprojected_extent = processing.run("native:polygonfromlayerextent",
+                                                           {'INPUT': gpxMergePprojected,
+                                                            'ROUND_TO': 0, 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+                demExtent = processing.run("native:buffer", {
+                    'INPUT': gpxMergePprojected_extent,
+                    'DISTANCE': 100, 'SEGMENTS': 90, 'END_CAP_STYLE': 2, 'JOIN_STYLE': 0, 'MITER_LIMIT': 2,
+                    'DISSOLVE': False, 'OUTPUT': os.path.join(delFolder, 'gpxMergeProjected_extent')})['OUTPUT']
+
+                demClipped = processing.run("gdal:cliprasterbymasklayer",
+                                            {'INPUT': DEM,
+                                             'MASK': demExtent,
+                                             'SOURCE_CRS': None, 'TARGET_CRS': None, 'TARGET_EXTENT': None,
+                                             'NODATA': None, 'ALPHA_BAND': False, 'CROP_TO_CUTLINE': True,
+                                             'KEEP_RESOLUTION': True, 'SET_RESOLUTION': False, 'X_RESOLUTION': None,
+                                             'Y_RESOLUTION': None, 'MULTITHREADING': False,
+                                             'OPTIONS': '', 'DATA_TYPE': 0, 'EXTRA': '',
+                                             'OUTPUT': os.path.join(delFolder, 'demElev.tif')})['OUTPUT']
+                # ===========================================================================
+                # Extract the elevation values to points, default field name: DEMelev
+                # ===========================================================================
+                DEMElev = processing.run("sagang:addrastervaluestopoints",
+                                         {'SHAPES': gpxMergePprojected,
+                                          'GRIDS': [demClipped],
+                                          'RESULT': 'TEMPORARY_OUTPUT',
+                                          'RESAMPLING': 3})['RESULT']
+                feedback.setProgressText(f'DEM extract value to point')
+
+                AGL = processing.run("native:fieldcalculator",
+                                     {'INPUT': DEMElev,
+                                      'FIELD_NAME': 'AGL',
+                                      'FIELD_TYPE': 1,
+                                      'FIELD_LENGTH': 100,
+                                      'FIELD_PRECISION': 0,
+                                      'FORMULA': 'case\r\nwhen "ele" - "demElev" <0 then 0 \r\nelse "ele" - "demElev"\r\nend\r\n\r\n',
+                                      'OUTPUT': gpxAllUnprojectedPath})['OUTPUT']
+                # ===========================================================================
+                # Create layer with only points less than 500m
+                # ===========================================================================
+                pointLessthan500m_UnprojectedPath = os.path.join(delFolder, 'PointLessthan500m_Unprojected' + interval)
+                pointLessthan500mExtracted = processing.run("native:extractbyexpression",
+                                                            {'EXPRESSION': '"AGL" < 500',
+                                                             'INPUT': AGL,
+                                                             'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+                rowCount = processing.run("qgis:basicstatisticsforfields",
+                                          {'INPUT_LAYER': pointLessthan500mExtracted,
+                                           'FIELD_NAME': 'time',
+                                           'OUTPUT_HTML_FILE': 'TEMPORARY_OUTPUT'})['COUNT']
+                feedback.setProgressText(f'point less than 500, row count: {rowCount}')
+                if rowCount == 0:
+                    feedback.setProgressText(f'point less than 500m layer table is empty')
+                    continue
+
+                # ===========================================================================
+                # Add time interval field
+                # ===========================================================================
+                timeIntervalField = processing.run("native:fieldcalculator",
+                                                   {'INPUT': pointLessthan500mExtracted,
+                                                    'FIELD_NAME': 'TimeInterval',
+                                                    'FIELD_TYPE': 0,
+                                                    'FIELD_LENGTH': 100,
+                                                    'FIELD_PRECISION': 0,
+                                                    'FORMULA': f"'{timeIntervalDict[interval][0]}'",
+                                                    'OUTPUT': pointLessthan500m_UnprojectedPath})['OUTPUT']
+                feedback.setProgressText(f'TimeInterval field added')
+                unprojectedGPX.append(timeIntervalField + f'|layername=PointLessthan500m_Unprojected{interval}')
+                feedback.setProgressText(f'Unprojected layer:{timeIntervalField} appended')
+            feedback.setProgressText(f'{unprojectedGPX}')
+
+            # ===========================================================================
+            # Merge all unprojectedGPS layers that includes points below 500m
+            # ===========================================================================
+            if len(unprojectedGPX) > 1:
+                gpxMergeUnprojected_500m = processing.run("sagang:mergevectorlayers", {
+                    'INPUT': unprojectedGPX,
+                    'MERGED': os.path.join(delFolder, 'pointLessthan500m_Unprojected_Final'),
+                    'SRCINFO': False,
+                    'MATCH': True,
+                    'DELETE': False})['MERGED'] + '.shp'
+            else:
+                gpxMergeUnprojected_500m = unprojectedGPX[0]
+
+            feedback.setProgressText(f'{gpxMergeUnprojected_500m} created')
+            # ===========================================================================
+            # Remove blank fields from gpxMergeUnprojected_500m_Final
+            # ===========================================================================
+            gpxMergeUnprojected_500m_reprojected = processing.run("native:refactorfields",
+                                    {'INPUT': gpxMergeUnprojected_500m,
+                                    'FIELDS_MAPPING': [{'expression': '"cat"', 'length': 16, 'name': 'cat', 'precision': 0, 'sub_type': 0,'type': 4, 'type_name': 'int8'},
+                                                       {'expression': '"ele"', 'length': 18,'name': 'ele', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
+                                                       {'expression': '"time"', 'length': 23, 'name': 'time', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                       {'expression': '"hdop"', 'length': 18, 'name': 'hdop', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
+                                                       {'expression': '"badelf_spe"', 'length': 18, 'name': 'badelf_spe', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
+                                                       {'expression': '"NameTkline"', 'length': 35, 'name': 'NameTkline', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                       {'expression': '"FlightName"', 'length': 34, 'name': 'FlightName', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                       {'expression': '"TotalTime"', 'length': 18, 'name': 'TotalTime', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
+                                                       {'expression': '"layer"', 'length': 39, 'name': 'layer', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                       {'expression': '"demElev"', 'length': 18, 'name': 'demElev', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
+                                                       {'expression': '"AGL"', 'length': 16, 'name': 'AGL', 'precision': 0, 'sub_type': 0, 'type': 4, 'type_name': 'int8'},
+                                                       {'expression': '"TimeInterval"', 'length': 18, 'name': 'TimeInterval', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'}],
+                                    'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+
+            # ===========================================================================
+            # Reproject the result to ESPG 3005
+            # ===========================================================================
+            feedback.setProgressText(f'Reprojecting allFlightPoints....')
+            pointLessthan500m_Projected = processing.run("grass7:v.proj",
+                                                         {'input': gpxMergeUnprojected_500m_reprojected,
+                                                          'crs': QgsCoordinateReferenceSystem('EPSG:3005'),
+                                                          'smax': 10000, '-z': False, '-w': False,
+                                                          'output': os.path.join(projectFolder, 'pointLessthan500m_Projected.gpkg'),
+                                                          'GRASS_REGION_PARAMETER': None,
+                                                          'GRASS_SNAP_TOLERANCE_PARAMETER': -1,
+                                                          'GRASS_MIN_AREA_PARAMETER': 0.0001,
+                                                          'GRASS_OUTPUT_TYPE_PARAMETER': 0,
+                                                          'GRASS_VECTOR_DSCO': '',
+                                                          'GRASS_VECTOR_LCO': '',
+                                                          'GRASS_VECTOR_EXPORT_NOCAT': False})['output']
+            feedback.setProgressText(f'Reprojected allFlightPoints')
+
+            # ===========================================================================
+            # Merge all the flight lines
+            # ===========================================================================
+            gpxMergeFlightLines = processing.run("native:mergevectorlayers",
+                                                 {'LAYERS': flightLines,
+                                                  'CRS': None,
+                                                  'OUTPUT': os.path.join(delFolder, 'allFlightLinesUnprojected')})['OUTPUT']
+            feedback.setProgressText(f'Reprojecting allFlightLines....')
+
+            allFlightLines_Projected = processing.run("grass7:v.proj",
+                                                      {'input': gpxMergeFlightLines,
+                                                       'crs': QgsCoordinateReferenceSystem('EPSG:3005'),
+                                                       'smax': 10000, '-z': False, '-w': False,
+                                                       'output': 'TEMPORARY_OUTPUT',
+                                                       'GRASS_REGION_PARAMETER': None,
+                                                       'GRASS_SNAP_TOLERANCE_PARAMETER': -1,
+                                                       'GRASS_MIN_AREA_PARAMETER': 0.0001,
+                                                       'GRASS_OUTPUT_TYPE_PARAMETER': 0,
+                                                       'GRASS_VECTOR_DSCO': '',
+                                                       'GRASS_VECTOR_LCO': '',
+                                                       'GRASS_VECTOR_EXPORT_NOCAT': False})['output']
+
+            allFlightLines = processing.run("native:savefeatures", {
+                'INPUT': allFlightLines_Projected,
+                'OUTPUT': os.path.join(projectFolder, 'allFlightLines'),
+                'LAYER_NAME': '', 'DATASOURCE_OPTIONS': '', 'LAYER_OPTIONS': ''})
+            feedback.setProgressText(f'Reprojected allFlightLines')
+
+            # ===========================================================================
+            # Add and calculate Height Range field to pointLessthan500m_Projected
+            # ===========================================================================
+            heightRangeField = processing.run("native:fieldcalculator",
+                                              {'INPUT': pointLessthan500m_Projected,
+                                               'FIELD_NAME': 'HeightRange',
+                                               'FIELD_TYPE': 2,
+                                               'FIELD_LENGTH': 100,
+                                               'FIELD_PRECISION': 0,
+                                               'FORMULA': 'case\nwhen "AGL" < 400 then \'0 to 400m\'\nelse \'400 to 500m\'\nend ',
+                                               'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+
+            feedback.setProgressText(f'Height Range field calculated')
+
+            # ===========================================================================
+            # Refactor the required fields from uwrbuffered layer that created previously
+            # ===========================================================================
+
+            uwr_fieldMapping = processing.run("native:refactorfields",
+                                              {'INPUT': uwrBufferedPath,
+                                               'FIELDS_MAPPING': [
+                                                   {'expression': f"{unit_no}", 'length': 14, 'name': 'UWR_NUMBER','precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                   {'expression': f"{unit_no_id}", 'length': 14, 'name': 'UWR_UNIT_N','precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                   {'expression': '"uwr_unique_id"', 'length': 100, 'name': 'uwr_unique_id', 'precision': 0, 'sub_type': 0, 'type': 10,'type_name': 'text'},
+                                                   {'expression': '"BUFF_DIST"', 'length': 0, 'name': 'BUFF_DIST', 'precision': 0, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'}],
+                                               'OUTPUT': os.path.join(delFolder, 'fieldMapping')})['OUTPUT']
+
+            # ===========================================================================
+            # Spatial join the pointLessthan500m and the selected uwebuffered field
+            # ===========================================================================
+            pointLessthan500m_uwrbuffer = processing.run("native:joinattributesbylocation",
+                                                         {'INPUT': heightRangeField,
+                                                          'PREDICATE': [0],
+                                                          'JOIN': uwr_fieldMapping,
+                                                          'JOIN_FIELDS': [],
+                                                          'METHOD': 0,
+                                                          'DISCARD_NONMATCHING': True,
+                                                          'PREFIX': '',
+                                                          'OUTPUT': os.path.join(delFolder,'Point_lessthan500Height_uwrbuffer')})['OUTPUT']
+
+            # ==============================================================
+            # If table is empty, ie, no point within uwr buffer zones, no need to get a table
+            # ==============================================================
+            rowCount = processing.run("qgis:basicstatisticsforfields",
+                                      {'INPUT_LAYER': pointLessthan500m_uwrbuffer + '|layername=Point_lessthan500Height_uwrbuffer',
+                                        'FIELD_NAME': 'time',
+                                        'OUTPUT_HTML_FILE': 'TEMPORARY_OUTPUT'})['COUNT']
+            if int(rowCount) == 0:
+                raise SystemExit("No flight lines intersect with uwr buffers")
+
+            # ==============================================================
+            # Add incurring severity according to buffer range
+            # ==============================================================
+            incursionSeverityField = processing.run("native:fieldcalculator",
+                                                    {'INPUT': pointLessthan500m_uwrbuffer,
+                                                     'FIELD_NAME': 'IncursionSeverity',
+                                                     'FIELD_TYPE': 2,
+                                                     'FIELD_LENGTH': 100,
+                                                     'FIELD_PRECISION': 0,
+                                                     'FORMULA': 'case\r\nwhen "BUFF_DIST"'
+                                                                + f"= {bufferDistList[0]} then \'In UWR\'\r\n"
+                                                                + 'when "BUFF_DIST" '
+                                                                + f"={bufferDistList[1]} then \'High\'\r\n"
+                                                                + 'when "BUFF_DIST" '
+                                                                + f"= {bufferDistList[2]} then \'Moderate\'\r\n"
+                                                                + 'when "BUFF_DIST"'
+                                                                + f"= {bufferDistList[3]} then \'Low\'\r\nend",
+                                                     'OUTPUT': os.path.join(projectFolder, 'allFlightPoints')})['OUTPUT']
+            feedback.setProgressText(f'{incursionSeverityField} created')
+
+            # ==============================================================
+            # Split points of each incursion severity in different layers
+            # ==============================================================
+            for severity in incursionSeverity:
+                name = "Below500m_" + str(severity)
+                diffISlyr = processing.run("native:extractbyexpression",
+                                           {'EXPRESSION': "IncursionSeverity = '" + str(incursionSeverity[severity]) + "'",
+                                            'INPUT': incursionSeverityField,
+                                            'OUTPUT': os.path.join(projectFolder, name)})['OUTPUT']
+                feedback.setProgressText(f'{diffISlyr} created')
+            feedback.setProgressText('---Process completed successfully---')
+
+        except QgsException as e:
+            feedback.setProgressText('Something is wrong - step2')
+            feedback.setProgressText(f'{e}')
+
+        finally:
+            # shutil.rmtree(delFolder)
             feedback.setProgressText('Completed')
 
 
