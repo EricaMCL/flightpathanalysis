@@ -287,7 +287,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         agl_rasterViewshed = "agl_rasterViewshed" + name_uwr
         polygonViewshed = "polygonViewshed_" + name_uwr
         totalViewshed = "totalViewshed_" + name_uwr
-        totalViewshed_dis = totalViewshed + "dis"
+        totalViewshed_dis = "dis" + totalViewshed
         int_aglViewshed = "int_aglViewshed" + name_uwr
         polygon_aglViewshed = "polygon_aglViewshed" + name_uwr
         dissolved_aglViewshed = "dissolved_aglViewshed" + name_uwr
@@ -448,7 +448,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                                               'FIELD':[],'SEPARATE_DISJOINT':False,
                                                               'OUTPUT':os.path.join(tempFolder, totalViewshed_dis)})['OUTPUT']
 
-        viewshedList.append(polyMergeUWR_dis + '.gpkg|layername=' + totalViewshed_dis)
+        viewshedList.append(polyMergeUWR_dis + '.gpkg')
         viewshed_delPath.append(f'{polyMergeUWR_dis}' + '.gpkg')
 
         agl_rasViewshedRasToPoly = processing.run("native:pixelstopolygons",
@@ -457,7 +457,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                     'OUTPUT': os.path.join(tempFolder, polygon_aglViewshed)})['OUTPUT']
 
         agl_rasViewshed_dis = processing.run("native:dissolve", {'INPUT':agl_rasViewshedRasToPoly,
-                                                              'FIELD':[],'SEPARATE_DISJOINT':False,
+                                                              'FIELD':['VALUE'],'SEPARATE_DISJOINT':False,
                                                               'OUTPUT':'TEMPORARY_OUTPUT'})['OUTPUT']
 
         agl_rasViewshed_join = processing.run("native:joinattributesbylocation", {
@@ -475,12 +475,12 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                                'OVERLAY': UWR_Buffer_selected,
                                                'OUTPUT':os.path.join(tempFolder, dissolved_aglViewshed)})['OUTPUT']
 
-        minElevViewshedList.append(agl_rasViewshed_clip + '.gpkg|layername=' + dissolved_aglViewshed)
+        minElevViewshedList.append(agl_rasViewshed_clip + '.gpkg')
         minElevViewshed_delPath.append(agl_rasViewshed_clip + '.gpkg')
 
 
     projectFolder = os.path.split(tempFolder)[0]
-    viewshed_final = processing.run("native:mergevectorlayers", {'LAYERS': minElevViewshedList,
+    viewshed_final = processing.run("native:mergevectorlayers", {'LAYERS': viewshedList,
                                                          'OUTPUT': os.path.join(projectFolder, 'viewshed')})['OUTPUT']
     minElevViewshed_final = processing.run("native:mergevectorlayers", {'LAYERS': minElevViewshedList,
                                                          'OUTPUT': os.path.join(projectFolder, 'minElevViewshed')})['OUTPUT']
