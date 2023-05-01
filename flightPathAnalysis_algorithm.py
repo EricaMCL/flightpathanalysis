@@ -1500,7 +1500,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
                 uwrFlightPoints_selected = processing.run("native:extractbyexpression",
                                                      {'EXPRESSION': expression,
                                                       'INPUT': allFlightPoints,
-                                                      'OUTPUT': os.path.join(delFolder, 'uwrFlightPoints_selected')})['OUTPUT']
+                                                      'OUTPUT': os.path.join(delFolder, 'uwrFlightPoints_selected' + nameUWR)})['OUTPUT']
                 feedback.setProgressText(f'{uwrFlightPoints_selected}')
                 # ==============================================================
                 # all flight points associated with the UWR
@@ -1521,7 +1521,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
                                 'PREDICATE': [0],
                                 'JOIN': minElevViewshedLyr_selected,
                                 'JOIN_FIELDS': [], 'METHOD': 2, 'DISCARD_NONMATCHING': False, 'PREFIX': '',
-                                'OUTPUT': os.path.join(delFolder, 'pointAGL')})['OUTPUT']
+                                'OUTPUT': os.path.join(delFolder, points_aglViewshed)})['OUTPUT']
 
                 # ==============================================================
                 # Getting the points that are terrain masked
@@ -1551,11 +1551,11 @@ class LOS_analysis(QgsProcessingAlgorithm):
                                                          'INPUT': poisAglViewshed,
                                                          'OUTPUT': os.path.join(delFolder, uwr_notmasked)})['OUTPUT']
 
-                # ==============================================================
-                # Put into a list of all the layers of points that are terrain masked
-                # ==============================================================
-                uwr_notmasked_List.append(uwr_notmasked_selected)
-                feedback.setProgressText(f'{uwr_notmasked_selected}')
+                    # ==============================================================
+                    # Put into a list of all the layers of points that are terrain masked
+                    # ==============================================================
+                    uwr_notmasked_List.append(uwr_notmasked_selected)
+                    feedback.setProgressText(f'{uwr_notmasked_selected}')
 
             # ==============================================================
             # Create final layer of all points that aren't terrain masked

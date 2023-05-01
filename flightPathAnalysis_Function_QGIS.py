@@ -448,7 +448,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                                               'FIELD':[],'SEPARATE_DISJOINT':False,
                                                               'OUTPUT':os.path.join(tempFolder, totalViewshed_dis)})['OUTPUT']
 
-        viewshedList.append(polyMergeUWR_dis + '.gpkg')
+        viewshedList.append(polyMergeUWR_dis)
         viewshed_delPath.append(f'{polyMergeUWR_dis}' + '.gpkg')
 
         agl_rasViewshedRasToPoly = processing.run("native:pixelstopolygons",
@@ -475,7 +475,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                                'OVERLAY': UWR_Buffer_selected,
                                                'OUTPUT':os.path.join(tempFolder, dissolved_aglViewshed)})['OUTPUT']
 
-        minElevViewshedList.append(agl_rasViewshed_clip + '.gpkg')
+        minElevViewshedList.append(agl_rasViewshed_clip)
         minElevViewshed_delPath.append(agl_rasViewshed_clip + '.gpkg')
 
 
