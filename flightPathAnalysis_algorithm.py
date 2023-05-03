@@ -2642,7 +2642,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             # ==============================================================
             # Add incurring severity according to buffer range
             # ==============================================================
-            incursionSeverityField = processing.run("native:fieldcalculator",
+            allFlightPoints = processing.run("native:fieldcalculator",
                                                     {'INPUT': pointLessthan500m_uwrbuffer,
                                                      'FIELD_NAME': 'IncursionSeverity',
                                                      'FIELD_TYPE': 2,
@@ -2657,7 +2657,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                                                                 + 'when "BUFF_DIST"'
                                                                 + f"= {bufferDistList[3]} then \'Low\'\r\nend",
                                                      'OUTPUT': os.path.join(projectFolder, 'allFlightPoints')})['OUTPUT']
-            feedback.setProgressText(f'{incursionSeverityField} created')
+            feedback.setProgressText(f'{allFlightPoints} created')
 
             # ==============================================================
             # Split points of each incursion severity in different layers
@@ -2666,9 +2666,47 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                 name = "Below500m_" + str(severity)
                 diffISlyr = processing.run("native:extractbyexpression",
                                            {'EXPRESSION': "IncursionSeverity = '" + str(incursionSeverity[severity]) + "'",
-                                            'INPUT': incursionSeverityField,
+                                            'INPUT': allFlightPoints,
                                             'OUTPUT': os.path.join(projectFolder, name)})['OUTPUT']
                 feedback.setProgressText(f'{diffISlyr} created')
+
+
+            # ==============================================================
+            # Generate the allFlightPointStats report
+            # ==============================================================
+            statsPath = os.path.join(projectFolder, 'allPointsStats')
+            allFlightPointsStats_temp = processing.run("qgis:statisticsbycategories", {
+                'INPUT': allFlightPoints,
+                'VALUES_FIELD_NAME': 'TimeInterval',
+                'CATEGORIES_FIELD_NAME': ['NameTkline', 'FlightName', 'TotalTime', 'HeightRange', 'UWR_NUMBER', 'UWR_UNIT_N',
+                                          'BUFF_DIST', 'IncursionSeverity', "TimeInterv"],
+                'OUTPUT': os.path.join(delFolder, 'statsTemp')})['OUTPUT']
+
+            allFlightPointsStats_fieldMapping = processing.run("native:refactorfields",
+                                                        {'INPUT':allFlightPointsStats_temp,
+                                                         'FIELDS_MAPPING':[
+                                                             {'expression': '"NameTkline"','length': 21,'name': 'NameTkline','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"FlightName"','length': 34,'name': 'FlightName','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"TotalTime"','length': 0,'name': 'TotalTime','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
+                                                             {'expression': '"HeightRange"','length': 100,'name': 'HeightRange','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"UWR_NUMBER"','length': 14,'name': 'UWR_NUMBER','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"UWR_UNIT_N"','length': 14,'name': 'UWR_UNIT_N','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"BUFF_DIST"','length': 0,'name': 'BUFF_DIST','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
+                                                             {'expression': '"IncursionSeverity"','length': 100,'name': 'IncursionSeverity','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"TimeInterv"', 'length': 0,'name': 'TimeInterv', 'precision': 0, 'sub_type': 0,'type': 6, 'type_name': 'double precision'},
+                                                             {'expression': '"count"','length': 0,'name': 'Frequency','precision': 0,'sub_type': 0,'type': 2,'type_name': 'integer'}],
+                                                         'OUTPUT':'TEMPORARY_OUTPUT'})['OUTPUT']
+            allFlightPointsStats_final = processing.run("native:fieldcalculator", {'INPUT':allFlightPointsStats_fieldMapping,
+                                                                              'FIELD_NAME':'TotalIncursionTime',
+                                                                              'FIELD_TYPE':0,
+                                                                              'FIELD_LENGTH':100,
+                                                                              'FIELD_PRECISION':2,
+                                                                              'FORMULA':' "Frequency" * "TimeInterv" ',
+                                                                              'OUTPUT':statsPath})['OUTPUT']
+
+            lyr = QgsVectorLayer(allFlightPointsStats_final, 'allFlightPointStats', "ogr")
+
+            QgsVectorFileWriter.writeAsVectorFormat(lyr, statsPath ,"utf-8",driverName = "XLSX", layerOptions = ['GEOMETRY=AS_XYZ'])
             feedback.setProgressText('---Process completed successfully---')
 
         except QgsException as e:
