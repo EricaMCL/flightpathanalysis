@@ -880,8 +880,12 @@ class flightPathConvert(QgsProcessingAlgorithm):
                 'SRCINFO': False,
                 'MATCH': True,
                 'DELETE': False})['MERGED'] + '.shp'
-            else:
+
+            elif len(unprojectedGPX) == 1:
                 gpxMergeUnprojected_500m = unprojectedGPX[0]
+
+            else:
+                feedback.setProgressText('No points under 500m')
 
 
             feedback.setProgressText(f'{gpxMergeUnprojected_500m} created')
