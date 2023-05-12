@@ -1496,22 +1496,21 @@ class LOS_analysis(QgsProcessingAlgorithm):
                         expression += ' AND (\"' + unit_no_id + '\" = \'' + uwr_no_id + "')"
 
                     break
+                    processing.run("native:createspatialindex", {
+                        'INPUT': minElevViewshedLyr})
                 feedback.setProgressText(f'Expression - {expression}')
                 minElevViewshedLyr_selected = processing.run("native:extractbyexpression",
                                                              {'EXPRESSION': expression + " AND (VALUE <> 0)",
                                                               'INPUT': minElevViewshedLyr,
-                                                              'OUTPUT': os.path.join(delFolder,
-                                                                                     f'minSelected_{nameUWR}')})[
-                    'OUTPUT']
+                                                              'OUTPUT': os.path.join(delFolder, 'TEMPORARY_OUTPUT')})['OUTPUT']
+                #f'minSelected_{nameUWR}'
                 feedback.setProgressText(f'minElevViewshed_Lyr_selected')
 
                 uwrFlightPoints_selected = processing.run("native:extractbyexpression",
                                                           {'EXPRESSION': expression,
                                                            'INPUT': allFlightPoints,
-                                                           'OUTPUT': os.path.join(delFolder,
-                                                                                  'uwrFlightPoints_selected' + nameUWR)})[
-                    'OUTPUT']
-                feedback.setProgressText(f'{uwrFlightPoints_selected}')
+                                                           'OUTPUT': os.path.join(delFolder, 'uwrFlightPoints_selected' + nameUWR)})['OUTPUT']
+                feedback.setProgressText(f'spatialindex')
                 # ==============================================================
                 # all flight points associated with the UWR
                 # ==============================================================
@@ -1557,12 +1556,12 @@ class LOS_analysis(QgsProcessingAlgorithm):
 
                 else:
                     terrainMaskPoi = ','.join(points_aglViewshed_NumSet)
-                    finalSQL = "ID NOT IN (" + terrainMaskPoi + ")"
+                    feedback.setProgressText(f'{terrainMaskPoi}')
+                    finalSQL = "fid NOT IN (" + terrainMaskPoi + ")"
                     uwr_notmasked_selected = processing.run("native:extractbyexpression",
                                                             {'EXPRESSION': finalSQL,
                                                              'INPUT': poisAglViewshed,
-                                                             'OUTPUT': os.path.join(delFolder, uwr_notmasked)})[
-                        'OUTPUT']
+                                                             'OUTPUT': os.path.join(delFolder, uwr_notmasked)})['OUTPUT']
 
                     # ==============================================================
                     # Put into a list of all the layers of points that are terrain masked
@@ -1576,8 +1575,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
             nonTerrainMaskedPoi_merge = processing.run("native:mergevectorlayers",
                                                        {'LAYERS': uwr_notmasked_List,
                                                         'CRS': None,
-                                                        'OUTPUT': os.path.join(delFolder, 'LOS_uwrFlightPoints')})[
-                'OUTPUT']
+                                                        'OUTPUT': os.path.join(delFolder, 'LOS_uwrFlightPoints')})['OUTPUT']
 
             feedback.setProgressText('Merged all non terrain masked points together')
 
@@ -1587,13 +1585,11 @@ class LOS_analysis(QgsProcessingAlgorithm):
             LOS_uwrFlightPoints_selected = processing.run("native:extractbyexpression",
                                                           {'EXPRESSION': " VALUE is Null ",
                                                            'INPUT': nonTerrainMaskedPoi_merge,
-                                                           'OUTPUT': os.path.join(delFolder,
-                                                                                  'LOS_uwrFlightPoints_selected')})[
-                'OUTPUT']
+                                                           'OUTPUT': os.path.join(delFolder,'LOS_uwrFlightPoints_selected')})['OUTPUT']
 
             poi_underDirectViewshed_count = processing.run("qgis:basicstatisticsforfields", {
                 'INPUT_LAYER': LOS_uwrFlightPoints_selected,
-                'FIELD_NAME': 'OBJECTID', 'OUTPUT_HTML_FILE': 'TEMPORARY_OUTPUT'})['COUNT']
+                'FIELD_NAME': 'fid', 'OUTPUT_HTML_FILE': 'TEMPORARY_OUTPUT'})['COUNT']
             feedback.setProgressText(f'Points under direct viewshed: {poi_underDirectViewshed_count}')
             viewshedPointCount[uwr] = poi_underDirectViewshed_count
 
