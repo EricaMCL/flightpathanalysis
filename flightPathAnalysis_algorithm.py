@@ -880,8 +880,12 @@ class flightPathConvert(QgsProcessingAlgorithm):
                 'SRCINFO': False,
                 'MATCH': True,
                 'DELETE': False})['MERGED'] + '.shp'
-            else:
+
+            elif len(unprojectedGPX) == 1:
                 gpxMergeUnprojected_500m = unprojectedGPX[0]
+
+            else:
+                feedback.setProgressText('No points under 500m')
 
 
             feedback.setProgressText(f'{gpxMergeUnprojected_500m} created')
@@ -1267,6 +1271,7 @@ class calGeneralStats(QgsProcessingAlgorithm):
     def createInstance(self):
         return calGeneralStats()
 
+
 class LOS_analysis(QgsProcessingAlgorithm):
     """
     This is an example algorithm that takes a vector layer and
@@ -1286,7 +1291,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
     # calling from the QGIS console.
     projectFolder = 'projectFolder'
     uwrBuffered = 'uwrBuffered'
-    #maxBufferRange = 'maxBufferRange'
+    # maxBufferRange = 'maxBufferRange'
     DEM = 'DEM'
     allFlightPoints = 'allFlightPoints'
     unit_id = 'unit_id'
@@ -1317,11 +1322,12 @@ class LOS_analysis(QgsProcessingAlgorithm):
             self.unit_id, self.tr('Input unit id field, column has text like u-2-002'), 'unit_id', self.uwrBuffered))
 
         self.addParameter(QgsProcessingParameterField(
-            self.unit_id_no, self.tr('Input unit id number field, column has text like Mg-059'), 'unit_id', self.uwrBuffered))
+            self.unit_id_no, self.tr('Input unit id number field, column has text like Mg-059'), 'unit_id',
+            self.uwrBuffered))
         # ===========================================================================
         # max buffer range
         # ===========================================================================
-        #self.addParameter(QgsProcessingParameterString(
+        # self.addParameter(QgsProcessingParameterString(
         #    self.maxBufferRange, self.tr('Max Buffer Range'), 1500))
         # ===========================================================================
         # allFlightPoints (created from flightpath conversion)
@@ -1339,9 +1345,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterFeatureSource(
             self.viewshed, self.tr('Existed viewshed'), [QgsProcessing.TypeVectorPolygon], optional=True))
         self.addParameter(QgsProcessingParameterFeatureSource(
-            self.minElevViewshed, self.tr('Existed minElevViewshed'), [QgsProcessing.TypeVectorPolygon],  optional=True))
-
-
+            self.minElevViewshed, self.tr('Existed minElevViewshed'), [QgsProcessing.TypeVectorPolygon], optional=True))
 
     def processAlgorithm(self, parameters, context, feedback):
         """
@@ -1353,7 +1357,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
         projectFolder = parameters['projectFolder']
         uwrBuffered = parameters['uwrBuffered']
         uwrBuffered_source = self.parameterAsSource(parameters, self.uwrBuffered, context)
-        #maxBuffRange = parameters['maxBufferRange']
+        # maxBuffRange = parameters['maxBufferRange']
         allFlightPoints = parameters['allFlightPoints']
         DEM = parameters['DEM']
         existedViewshed = parameters['viewshed']
@@ -1374,7 +1378,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
         try:
             feedback.setProgressText(f'{projectFolder}')
             feedback.setProgressText(f'{uwrBuffered}')
-            #feedback.setProgressText(f'{maxBuffRange}')
+            # feedback.setProgressText(f'{maxBuffRange}')
             feedback.setProgressText(f'{allFlightPoints}')
             feedback.setProgressText(f'{DEM}')
             feedback.setProgressText(f'{existedViewshed}')
@@ -1428,7 +1432,9 @@ class LOS_analysis(QgsProcessingAlgorithm):
             if len(UWRRequireViewshedSet) > 0:
                 maxBuffRange = 1500
                 feedback.setProgressText(f'MAKING viewshed layer')
-                viewshedCreated = makeViewshed(UWRRequireViewshedSet, uwrBuffered, maxBuffRange, unit_no, unit_no_id, uwr_unique_Field, delFolder, DEM, existedViewshed, existedMinElevViewshed)
+                viewshedCreated = makeViewshed(UWRRequireViewshedSet, uwrBuffered, maxBuffRange, unit_no, unit_no_id,
+                                               uwr_unique_Field, delFolder, DEM, existedViewshed,
+                                               existedMinElevViewshed)
                 feedback.setProgressText(f'{viewshedCreated}')
                 feedback.setProgressText(f'{UWRRequireViewshedSet}')
                 viewshed = viewshedCreated[0]
@@ -1490,18 +1496,21 @@ class LOS_analysis(QgsProcessingAlgorithm):
                         expression += ' AND (\"' + unit_no_id + '\" = \'' + uwr_no_id + "')"
 
                     break
-
+                    processing.run("native:createspatialindex", {
+                        'INPUT': minElevViewshedLyr})
+                feedback.setProgressText(f'Expression - {expression}')
                 minElevViewshedLyr_selected = processing.run("native:extractbyexpression",
-                                                     {'EXPRESSION': expression + " AND (VALUE <> 0)",
-                                                      'INPUT': minElevViewshedLyr,
-                                                      'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+                                                             {'EXPRESSION': expression + " AND (VALUE <> 0)",
+                                                              'INPUT': minElevViewshedLyr,
+                                                              'OUTPUT': os.path.join(delFolder, 'TEMPORARY_OUTPUT')})['OUTPUT']
+                #f'minSelected_{nameUWR}'
                 feedback.setProgressText(f'minElevViewshed_Lyr_selected')
 
                 uwrFlightPoints_selected = processing.run("native:extractbyexpression",
-                                                     {'EXPRESSION': expression,
-                                                      'INPUT': allFlightPoints,
-                                                      'OUTPUT': os.path.join(delFolder, 'uwrFlightPoints_selected')})['OUTPUT']
-                feedback.setProgressText(f'{uwrFlightPoints_selected}')
+                                                          {'EXPRESSION': expression,
+                                                           'INPUT': allFlightPoints,
+                                                           'OUTPUT': os.path.join(delFolder, 'uwrFlightPoints_selected' + nameUWR)})['OUTPUT']
+                feedback.setProgressText(f'spatialindex')
                 # ==============================================================
                 # all flight points associated with the UWR
                 # ==============================================================
@@ -1517,11 +1526,13 @@ class LOS_analysis(QgsProcessingAlgorithm):
                 # Spatial join points with points that aren't in the direct viewshed but within the buffer zone
                 # ==============================================================
                 poisAglViewshed = processing.run("native:joinattributesbylocation",
-                               {'INPUT':uwrFlightPoints_selected ,
-                                'PREDICATE': [0],
-                                'JOIN': minElevViewshedLyr_selected,
-                                'JOIN_FIELDS': [], 'METHOD': 2, 'DISCARD_NONMATCHING': False, 'PREFIX': '',
-                                'OUTPUT': os.path.join(delFolder, 'pointAGL')})['OUTPUT']
+                                                 {'INPUT': uwrFlightPoints_selected,
+                                                  'JOIN': minElevViewshedLyr_selected,
+                                                  'PREDICATE': [0], 'JOIN_FIELDS': [], 'METHOD': 1,
+                                                  'DISCARD_NONMATCHING': False, 'PREFIX': '',
+                                                  'OUTPUT': os.path.join(delFolder, points_aglViewshed)})['OUTPUT']
+
+                feedback.setProgressText(f'{poisAglViewshed}')
 
                 # ==============================================================
                 # Getting the points that are terrain masked
@@ -1536,7 +1547,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
                     agl_attribute = feature.attributes()[aglIndex]
                     valueIndex = poisAglViewshedLyr_fields.index('VALUE')
                     value_attribute = feature.attributes()[valueIndex]
-                    if value_attribute is not None and agl_attribute < value_attribute:
+                    if type(value_attribute) is not None and agl_attribute < value_attribute:
                         points_aglViewshed_NumSet.add(str(fid_attribute))
                 feedback.setProgressText(f'points_aglViewshed_NumSet: {points_aglViewshed_NumSet}')
 
@@ -1545,25 +1556,26 @@ class LOS_analysis(QgsProcessingAlgorithm):
 
                 else:
                     terrainMaskPoi = ','.join(points_aglViewshed_NumSet)
-                    finalSQL = "ID NOT IN (" + terrainMaskPoi + ")"
+                    feedback.setProgressText(f'{terrainMaskPoi}')
+                    finalSQL = "fid NOT IN (" + terrainMaskPoi + ")"
                     uwr_notmasked_selected = processing.run("native:extractbyexpression",
-                                                        {'EXPRESSION': finalSQL,
-                                                         'INPUT': poisAglViewshed,
-                                                         'OUTPUT': os.path.join(delFolder, uwr_notmasked)})['OUTPUT']
+                                                            {'EXPRESSION': finalSQL,
+                                                             'INPUT': poisAglViewshed,
+                                                             'OUTPUT': os.path.join(delFolder, uwr_notmasked)})['OUTPUT']
 
-                # ==============================================================
-                # Put into a list of all the layers of points that are terrain masked
-                # ==============================================================
-                uwr_notmasked_List.append(uwr_notmasked_selected)
-                feedback.setProgressText(f'{uwr_notmasked_selected}')
+                    # ==============================================================
+                    # Put into a list of all the layers of points that are terrain masked
+                    # ==============================================================
+                    uwr_notmasked_List.append(uwr_notmasked_selected)
+                    feedback.setProgressText(f'{uwr_notmasked_selected}')
 
             # ==============================================================
             # Create final layer of all points that aren't terrain masked
             # ==============================================================
             nonTerrainMaskedPoi_merge = processing.run("native:mergevectorlayers",
-                                               {'LAYERS': uwr_notmasked_List,
-                                                'CRS': None,
-                                                'OUTPUT': os.path.join(delFolder, 'LOS_uwrFlightPoints')})['OUTPUT']
+                                                       {'LAYERS': uwr_notmasked_List,
+                                                        'CRS': None,
+                                                        'OUTPUT': os.path.join(delFolder, 'LOS_uwrFlightPoints')})['OUTPUT']
 
             feedback.setProgressText('Merged all non terrain masked points together')
 
@@ -1571,13 +1583,13 @@ class LOS_analysis(QgsProcessingAlgorithm):
             # Get count of points that are in direct viewshed
             # ==============================================================
             LOS_uwrFlightPoints_selected = processing.run("native:extractbyexpression",
-                                                    {'EXPRESSION': " VALUE is Null ",
-                                                     'INPUT': nonTerrainMaskedPoi_merge,
-                                                     'OUTPUT': os.path.join(delFolder, 'LOS_uwrFlightPoints_selected')})['OUTPUT']
+                                                          {'EXPRESSION': " VALUE is Null ",
+                                                           'INPUT': nonTerrainMaskedPoi_merge,
+                                                           'OUTPUT': os.path.join(delFolder,'LOS_uwrFlightPoints_selected')})['OUTPUT']
 
             poi_underDirectViewshed_count = processing.run("qgis:basicstatisticsforfields", {
                 'INPUT_LAYER': LOS_uwrFlightPoints_selected,
-                'FIELD_NAME': 'OBJECTID', 'OUTPUT_HTML_FILE': 'TEMPORARY_OUTPUT'})['COUNT']
+                'FIELD_NAME': 'fid', 'OUTPUT_HTML_FILE': 'TEMPORARY_OUTPUT'})['COUNT']
             feedback.setProgressText(f'Points under direct viewshed: {poi_underDirectViewshed_count}')
             viewshedPointCount[uwr] = poi_underDirectViewshed_count
 
@@ -1598,7 +1610,6 @@ class LOS_analysis(QgsProcessingAlgorithm):
 
         finally:
             feedback.setProgressText('Completed')
-
 
         total = 100.0 / uwrBuffered.featureCount() if uwrBuffered.featureCount() else 0
         features = uwrBuffered.getFeatures()
@@ -1660,6 +1671,7 @@ class LOS_analysis(QgsProcessingAlgorithm):
     def createInstance(self):
         return LOS_analysis()
 
+
 class finalPointsStats(QgsProcessingAlgorithm):
     """
     This is an example algorithm that takes a vector layer and
@@ -1695,8 +1707,6 @@ class finalPointsStats(QgsProcessingAlgorithm):
         # ===========================================================================
         self.addParameter(QgsProcessingParameterFeatureSource(
             self.LOS_finalPoints, self.tr('Input LOS_finalPoints'), [QgsProcessing.TypeVectorPoint]))
-
-
 
     def processAlgorithm(self, parameters, context, feedback):
         """
@@ -1734,29 +1744,47 @@ class finalPointsStats(QgsProcessingAlgorithm):
             LOS_finalPointsStats_temp = processing.run("qgis:statisticsbycategories", {
                 'INPUT': LOS_finalPoints,
                 'VALUES_FIELD_NAME': 'TimeInterval',
-                'CATEGORIES_FIELD_NAME': ['NameTkline', 'FlightName', 'TotalTime', 'HeightRange', 'UWR_NUMBER', 'UWR_UNIT_N',
+                'CATEGORIES_FIELD_NAME': ['NameTkline', 'FlightName', 'TotalTime', 'HeightRange', 'UWR_NUMBER',
+                                          'UWR_UNIT_N',
                                           'BUFF_DIST', 'IncursionSeverity', "TimeInterv"],
                 'OUTPUT': os.path.join(delFolder, 'LOS_statsTemp')})['OUTPUT']
 
             LOS_finalPointsStats_fieldMapping = processing.run("native:refactorfields",
-                                                        {'INPUT':LOS_finalPointsStats_temp,
-                                                         'FIELDS_MAPPING':[
-                                                             {'expression': '"NameTkline"','length': 21,'name': 'NameTkline','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"FlightName"','length': 34,'name': 'FlightName','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"TotalTime"','length': 0,'name': 'TotalTime','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
-                                                             {'expression': '"HeightRange"','length': 100,'name': 'HeightRange','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"UWR_NUMBER"','length': 14,'name': 'UWR_NUMBER','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"UWR_UNIT_N"','length': 14,'name': 'UWR_UNIT_N','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"BUFF_DIST"','length': 0,'name': 'BUFF_DIST','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
-                                                             {'expression': '"IncursionSeverity"','length': 100,'name': 'IncursionSeverity','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"sum"','length': 0,'name': 'TimeInterv','precision': 0,'sub_type': 0,'type': 2,'type_name': 'integer'}],
-                                                         'OUTPUT':'TEMPORARY_OUTPUT'})['OUTPUT']
-
+                                                               {'INPUT': LOS_finalPointsStats_temp,
+                                                                'FIELDS_MAPPING': [
+                                                                    {'expression': '"NameTkline"', 'length': 21,
+                                                                     'name': 'NameTkline', 'precision': 0,
+                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"FlightName"', 'length': 34,
+                                                                     'name': 'FlightName', 'precision': 0,
+                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"TotalTime"', 'length': 0,
+                                                                     'name': 'TotalTime', 'precision': 0, 'sub_type': 0,
+                                                                     'type': 6, 'type_name': 'double precision'},
+                                                                    {'expression': '"HeightRange"', 'length': 100,
+                                                                     'name': 'HeightRange', 'precision': 0,
+                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"UWR_NUMBER"', 'length': 14,
+                                                                     'name': 'UWR_NUMBER', 'precision': 0,
+                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"UWR_UNIT_N"', 'length': 14,
+                                                                     'name': 'UWR_UNIT_N', 'precision': 0,
+                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"BUFF_DIST"', 'length': 0,
+                                                                     'name': 'BUFF_DIST', 'precision': 0, 'sub_type': 0,
+                                                                     'type': 6, 'type_name': 'double precision'},
+                                                                    {'expression': '"IncursionSeverity"', 'length': 100,
+                                                                     'name': 'IncursionSeverity', 'precision': 0,
+                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"sum"', 'length': 0,
+                                                                     'name': 'TimeInterv', 'precision': 0,
+                                                                     'sub_type': 0, 'type': 2, 'type_name': 'integer'}],
+                                                                'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
             lyr = QgsVectorLayer(LOS_finalPointsStats_fieldMapping, 'LOS_finalPointsStats', "ogr")
 
-            QgsVectorFileWriter.writeAsVectorFormat(lyr, statsPath ,"utf-8",driverName = "XLSX", layerOptions = ['GEOMETRY=AS_XYZ'])
-
+            QgsVectorFileWriter.writeAsVectorFormat(lyr, statsPath, "utf-8", driverName="XLSX",
+                                                    layerOptions=['GEOMETRY=AS_XYZ'])
 
             feedback.setProgressText('---Process completed successfully---')
 
@@ -1766,7 +1794,6 @@ class finalPointsStats(QgsProcessingAlgorithm):
 
         finally:
             feedback.setProgressText('Completed')
-
 
         total = 100.0 / lyr.featureCount() if lyr.featureCount() else 0
         features = lyr.getFeatures()
@@ -1827,6 +1854,7 @@ class finalPointsStats(QgsProcessingAlgorithm):
 
     def createInstance(self):
         return finalPointsStats()
+
 
 class flightPathAnalysis(QgsProcessingAlgorithm):
     """
@@ -1914,7 +1942,6 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterString(
             self.buffDistIS_low, self.tr('Buffer distance - Low Incursion Severity'), 1500))
 
-
     def processAlgorithm(self, parameters, context, feedback):
         """
         Here is where the processing itself takes place.
@@ -1929,10 +1956,11 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
         DEM = parameters['DEM']
         existedViewshed = parameters['viewshed']
         existedMinElevViewshed = parameters['minElevViewshed']
-        bufferDistList = [int(0),int(parameters['buffDistIS_high']), int(parameters['buffDistIS_moderate']),
+        bufferDistList = [int(0), int(parameters['buffDistIS_high']), int(parameters['buffDistIS_moderate']),
                           int(parameters['buffDistIS_low'])]
-        incursionSeverity = {int(0): "In UWR", int(parameters['buffDistIS_high']): "High", int(parameters['buffDistIS_moderate']): "Moderate",
-                          int(parameters['buffDistIS_low']): "Low"}
+        incursionSeverity = {int(0): "In UWR", int(parameters['buffDistIS_high']): "High",
+                             int(parameters['buffDistIS_moderate']): "Moderate",
+                             int(parameters['buffDistIS_low']): "Low"}
 
         # ==============================================================
         # Result layer path
@@ -1950,7 +1978,6 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
         uwr_unique_Field = "uwr_unique_id"
         final = None
 
-
         if os.path.exists(delFolder):
             try:
                 shutil.rmtree(delFolder)
@@ -1959,7 +1986,6 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                 feedback.setProgressText('unable to delete delFolder')
         else:
             os.mkdir(delFolder)
-
 
         # ===========================================================================
         # Step.1 Create uwrBuffered layer
@@ -1973,7 +1999,6 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                     feedback.setProgressText('unable to delete delFolder')
             else:
                 os.mkdir(delFolder)
-
 
             bufferDistList = [int(parameters['buffDistIS_high']), int(parameters['buffDistIS_moderate']),
                               int(parameters['buffDistIS_low'])]
@@ -1990,12 +2015,13 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             # Fix the input geometry if invalid found, and replace the input for further process
             # ===========================================================================
             if errorCount > 0:
-                fixGeom = processing.run("native:fixgeometries",{'INPUT': origUWR, 'OUTPUT': 'TEMPORARY_OUTPUT'})
+                fixGeom = processing.run("native:fixgeometries", {'INPUT': origUWR, 'OUTPUT': 'TEMPORARY_OUTPUT'})
                 feedback.setProgressText('Geometry fixed')
                 origUWR = fixGeom['OUTPUT']
 
             else:
-                fixGeom = processing.run("native:fixgeometries",{'INPUT': parameters['origUWR'], 'OUTPUT': 'TEMPORARY_OUTPUT'})
+                fixGeom = processing.run("native:fixgeometries",
+                                         {'INPUT': parameters['origUWR'], 'OUTPUT': 'TEMPORARY_OUTPUT'})
                 feedback.setProgressText('Geometry fixed')
                 origUWR = fixGeom['OUTPUT']
 
@@ -2010,7 +2036,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             for feature in origUWR.getFeatures():
                 uwr_unique_Field_value = f'{feature.attributes()[unit_no_index]}__{feature.attributes()[unit_no_id_index]}'
                 uwrSet.add(uwr_unique_Field_value)
-                #feedback.setProgressText(f'{uwr_unique_Field_value} added and updated')
+                # feedback.setProgressText(f'{uwr_unique_Field_value} added and updated')
 
             feedback.setProgressText(f'{uwr_unique_Field} added and updated')
             feedback.setProgressText(f'{uwrSet} added and updated')
@@ -2032,7 +2058,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                 uwr_unique_Field_index = uwrBufferedFieldList.index(uwr_unique_Field)
                 feedback.setProgressText(f'{uwrBufferedFieldList}')
                 for feature in uwrBuffered_layer.getFeatures():
-                    uwr_unique_Field_value =  f'{feature.attributes()[uwr_unique_Field_index]}'
+                    uwr_unique_Field_value = f'{feature.attributes()[uwr_unique_Field_index]}'
                     createdUWRSet.add(uwr_unique_Field_value)
 
                 uwrRequireSet = uwrSet - createdUWRSet
@@ -2044,13 +2070,12 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                 uwrRequireSet = uwrSet
                 feedback.setProgressText(f'uwrBuffered NOT exists in project folder.')
 
-
             if len(uwrRequireSet) > 0:
                 if uwrBuffered_exist:
-                # ==============================================================
-                # Make new field in copy of orig UWR FC for unique UWR id.
-                # DIFFERENT FROM unique uwr id. make it so that there's no way this field existed before
-                # ==============================================================
+                    # ==============================================================
+                    # Make new field in copy of orig UWR FC for unique UWR id.
+                    # DIFFERENT FROM unique uwr id. make it so that there's no way this field existed before
+                    # ==============================================================
                     tempUniqueUWRField = 'tempUniqueUWRField'
                     if tempUniqueUWRField not in origUWRFieldList:
                         tempGPKG = processing.run("native:fieldcalculator",
@@ -2061,8 +2086,8 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                                                    'FIELD_TYPE': 2,
                                                    'FORMULA': f' "{unit_no}" + \'__\' + "{unit_no_id}" ',
                                                    'INPUT': origUWR,
-                                                   'OUTPUT': 'TEMPORARY_OUTPUT'}, context=context, feedback=feedback)['OUTPUT']
-
+                                                   'OUTPUT': 'TEMPORARY_OUTPUT'}, context=context, feedback=feedback)[
+                            'OUTPUT']
 
                     # ==============================================================
                     # Select require uwr by making query with uwrRequireSet
@@ -2071,9 +2096,9 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                     unbufferedFL = os.path.join(projectFolder, 'unbufferedUWR')
                     expression = tempUniqueUWRField + " in ('" + uwrList_String + "')"
                     unbufferedFLPath = processing.run("native:extractbyexpression",
-                                   {'EXPRESSION': expression,
-                                    'INPUT': tempGPKG,
-                                    'OUTPUT': unbufferedFL})['OUTPUT']
+                                                      {'EXPRESSION': expression,
+                                                       'INPUT': tempGPKG,
+                                                       'OUTPUT': unbufferedFL})['OUTPUT']
                     feedback.setProgressText(f'unBufferedUWR created in {unbufferedFL}')
                     requireUWRLayer = unbufferedFLPath
                 else:
@@ -2092,9 +2117,9 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                                                 'OUTPUT': 'TEMPORARY_OUTPUT',
                                                 'SEPARATE_DISJOINT': False})['OUTPUT']
                 dissolvedOrig_fid_removed = processing.run("native:deletecolumn",
-                                               {'COLUMN': ['fid'],
-                                                'INPUT': dissolvedOrig,
-                                                'OUTPUT': dissolvedOrigPath})['OUTPUT']
+                                                           {'COLUMN': ['fid'],
+                                                            'INPUT': dissolvedOrig,
+                                                            'OUTPUT': dissolvedOrigPath})['OUTPUT']
 
                 # ============re==================================================
                 # Start list of intermediate features to be deleted
@@ -2108,8 +2133,8 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                 rawBufferDict = {}
                 for bufferDist in bufferDistList:
                     rawBufferLoc, rawBufferName = rawBuffer(projectFolder, 'dissolve.gpkg',
-                                                  str(bufferDist) + 'Meters', bufferDist, delFolder,
-                                                      unit_no, unit_no_id, uwr_unique_Field)
+                                                            str(bufferDist) + 'Meters', bufferDist, delFolder,
+                                                            unit_no, unit_no_id, uwr_unique_Field)
                     rawBufferDict[bufferDist] = [rawBufferLoc, rawBufferName]
                     delFC.append(os.path.join(rawBufferLoc, rawBufferName))
                     feedback.setProgressText(f"raw buffer created, {rawBufferName}")
@@ -2135,17 +2160,20 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                     feedback.setProgressText(f'{bufferDist} -- Bufferdist')
 
                     if sortBufferDistList.index(bufferDist) == 0:
-                        onlyBufferDist = findBufferRange(dissolvedOrig_fid_removed, ToErasePath, uniqueIDFields, delFolder, bufferDist)
+                        onlyBufferDist = findBufferRange(dissolvedOrig_fid_removed, ToErasePath, uniqueIDFields,
+                                                         delFolder, bufferDist)
                         feedback.setProgressText(f'UseToErasePath - {dissolvedOrig_fid_removed}')
                         feedback.setProgressText(f'ToErasePath - {ToErasePath}')
                     else:
                         prevIndex = sortBufferDistList.index(bufferDist) - 1
                         prevBufferDist = sortBufferDistList[prevIndex]
-                        prevBufferPath = os.path.join(rawBufferDict[prevBufferDist][0], rawBufferDict[prevBufferDist][1] + '.gpkg')
+                        prevBufferPath = os.path.join(rawBufferDict[prevBufferDist][0],
+                                                      rawBufferDict[prevBufferDist][1] + '.gpkg')
                         feedback.setProgressText(prevBufferPath)
                         feedback.setProgressText(f'UseToErasePath - {prevBufferPath}')
                         feedback.setProgressText(f'ToErasePath - {ToErasePath}')
-                        onlyBufferDist = findBufferRange(prevBufferPath, ToErasePath, uniqueIDFields, delFolder, bufferDist)
+                        onlyBufferDist = findBufferRange(prevBufferPath, ToErasePath, uniqueIDFields, delFolder,
+                                                         bufferDist)
 
                     requireMergeBufferList.append(onlyBufferDist)
                     feedback.setProgressText(f'appended uwronly{onlyBufferDist} -- onlyBufferDist')
@@ -2155,31 +2183,33 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                 # ==============================================================
                 uwrOnlyNewPath = os.path.join(projectFolder, uwrOnly)
                 uwrOnly_new = processing.run("native:savefeatures",
-                                               {'INPUT': dissolvedOrig_fid_removed,
-                                                'OUTPUT': 'TEMPORARY_OUTPUT',
-                                                'LAYER_NAME': '',
-                                                'DATASOURCE_OPTIONS': '',
-                                                'LAYER_OPTIONS': ''})['OUTPUT']
+                                             {'INPUT': dissolvedOrig_fid_removed,
+                                              'OUTPUT': 'TEMPORARY_OUTPUT',
+                                              'LAYER_NAME': '',
+                                              'DATASOURCE_OPTIONS': '',
+                                              'LAYER_OPTIONS': ''})['OUTPUT']
 
                 uwrOnly_new_uniField = processing.run("native:fieldcalculator",
-                                       {'FIELD_LENGTH': 100,
-                                        'FIELD_NAME': uwr_unique_Field,
-                                        'NEW_FIELD': True,
-                                        'FIELD_PRECISION': 0,
-                                        'FIELD_TYPE': 2,
-                                        'FORMULA': f' "{unit_no}" + \'__\' + "{unit_no_id}" ',
-                                        'INPUT': uwrOnly_new,
-                                        'OUTPUT': 'TEMPORARY_OUTPUT'}, context=context, feedback=feedback)['OUTPUT']
+                                                      {'FIELD_LENGTH': 100,
+                                                       'FIELD_NAME': uwr_unique_Field,
+                                                       'NEW_FIELD': True,
+                                                       'FIELD_PRECISION': 0,
+                                                       'FIELD_TYPE': 2,
+                                                       'FORMULA': f' "{unit_no}" + \'__\' + "{unit_no_id}" ',
+                                                       'INPUT': uwrOnly_new,
+                                                       'OUTPUT': 'TEMPORARY_OUTPUT'}, context=context,
+                                                      feedback=feedback)['OUTPUT']
 
                 uwrOnly_new_uniField_buffDist = processing.run("native:fieldcalculator",
-                                       {'FIELD_LENGTH': 100,
-                                        'FIELD_NAME': 'BUFF_DIST',
-                                        'NEW_FIELD': True,
-                                        'FIELD_PRECISION': 0,
-                                        'FIELD_TYPE': 0,
-                                        'FORMULA': 0,
-                                        'INPUT': uwrOnly_new_uniField,
-                                        'OUTPUT': uwrOnlyNewPath}, context=context, feedback=feedback)['OUTPUT']
+                                                               {'FIELD_LENGTH': 100,
+                                                                'FIELD_NAME': 'BUFF_DIST',
+                                                                'NEW_FIELD': True,
+                                                                'FIELD_PRECISION': 0,
+                                                                'FIELD_TYPE': 0,
+                                                                'FORMULA': 0,
+                                                                'INPUT': uwrOnly_new_uniField,
+                                                                'OUTPUT': uwrOnlyNewPath}, context=context,
+                                                               feedback=feedback)['OUTPUT']
                 requireMergeBufferList.append(uwrOnly_new_uniField_buffDist)
 
                 feedback.setProgressText(f'{uwrOnly_new_uniField_buffDist} created')
@@ -2191,15 +2221,15 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                 if uwrBuffered_exist:
                     requireMergeBufferList.append(uwrBuffered_layer)
                     uwrBuffered = processing.run("native:mergevectorlayers",
-                                           {'LAYERS': requireMergeBufferList,
-                                            'OUTPUT': uwrBufferedPath + '_updated'})['OUTPUT']
+                                                 {'LAYERS': requireMergeBufferList,
+                                                  'OUTPUT': uwrBufferedPath + '_updated'})['OUTPUT']
                     os.remove(uwrBufferedPath + '.gpkg')
                     os.rename(final, uwrBufferedPath + '.gpkg')
                     feedback.setProgressText('final geopackage exists')
                 else:
                     uwrBuffered = processing.run("native:mergevectorlayers",
-                                           {'LAYERS': requireMergeBufferList,
-                                            'OUTPUT': uwrBufferedPath})['OUTPUT']
+                                                 {'LAYERS': requireMergeBufferList,
+                                                  'OUTPUT': uwrBufferedPath})['OUTPUT']
 
                     for f in requireMergeBufferList:
                         feedback.setProgressText(f'{f} merged')
@@ -2213,8 +2243,8 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             feedback.setProgressText(f'{e}')
 
         finally:
-            #shutil.rmtree(delFolder)
-            #feedback.setProgressText(f'{delFolder} deleted')
+            # shutil.rmtree(delFolder)
+            # feedback.setProgressText(f'{delFolder} deleted')
             feedback.setProgressText('Completed')
 
         # ===========================================================================
@@ -2298,7 +2328,9 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                     tkptLyrExtracted = processing.run("native:extractbyexpression",
                                                       {'EXPRESSION': query,
                                                        'INPUT': tkptLyr_id,
-                                                       'OUTPUT': os.path.join(delFolder, 'tkptExtracted' + str(flightCount))})['OUTPUT']
+                                                       'OUTPUT': os.path.join(delFolder,
+                                                                              'tkptExtracted' + str(flightCount))})[
+                        'OUTPUT']
                     tkptLyr = QgsVectorLayer((tkptLyrExtracted), "", "ogr")
                     tkptExtractedTimeIndex = (tkptLyr.fields().names()).index('time')
                     features = tkptLyr.getFeatures()
@@ -2311,7 +2343,8 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                         values.append(timeValue)
                     timeInterval = values[1].toTime_t() - values[0].toTime_t()
                     totalFlightTime = rowCount * timeInterval
-                    feedback.setProgressText(f'The total flight time of {gpxFormattedName} is {totalFlightTime} seconds')
+                    feedback.setProgressText(
+                        f'The total flight time of {gpxFormattedName} is {totalFlightTime} seconds')
 
                 # ===========================================================================
                 # Add the Name field from tracks layer to track points layer
@@ -2528,20 +2561,49 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             # Remove blank fields from gpxMergeUnprojected_500m_Final
             # ===========================================================================
             gpxMergeUnprojected_500m_reprojected = processing.run("native:refactorfields",
-                                    {'INPUT': gpxMergeUnprojected_500m,
-                                    'FIELDS_MAPPING': [{'expression': '"cat"', 'length': 16, 'name': 'cat', 'precision': 0, 'sub_type': 0,'type': 4, 'type_name': 'int8'},
-                                                       {'expression': '"ele"', 'length': 18,'name': 'ele', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
-                                                       {'expression': '"time"', 'length': 23, 'name': 'time', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
-                                                       {'expression': '"hdop"', 'length': 18, 'name': 'hdop', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
-                                                       {'expression': '"badelf_spe"', 'length': 18, 'name': 'badelf_spe', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
-                                                       {'expression': '"NameTkline"', 'length': 35, 'name': 'NameTkline', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
-                                                       {'expression': '"FlightName"', 'length': 34, 'name': 'FlightName', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
-                                                       {'expression': '"TotalTime"', 'length': 18, 'name': 'TotalTime', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
-                                                       {'expression': '"layer"', 'length': 39, 'name': 'layer', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
-                                                       {'expression': '"demElev"', 'length': 18, 'name': 'demElev', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
-                                                       {'expression': '"AGL"', 'length': 16, 'name': 'AGL', 'precision': 0, 'sub_type': 0, 'type': 4, 'type_name': 'int8'},
-                                                       {'expression': '"TimeInterval"', 'length': 18, 'name': 'TimeInterval', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'}],
-                                    'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
+                                                                  {'INPUT': gpxMergeUnprojected_500m,
+                                                                   'FIELDS_MAPPING': [
+                                                                       {'expression': '"cat"', 'length': 16,
+                                                                        'name': 'cat', 'precision': 0, 'sub_type': 0,
+                                                                        'type': 4, 'type_name': 'int8'},
+                                                                       {'expression': '"ele"', 'length': 18,
+                                                                        'name': 'ele', 'precision': 10, 'sub_type': 0,
+                                                                        'type': 6, 'type_name': 'double precision'},
+                                                                       {'expression': '"time"', 'length': 23,
+                                                                        'name': 'time', 'precision': 0, 'sub_type': 0,
+                                                                        'type': 10, 'type_name': 'text'},
+                                                                       {'expression': '"hdop"', 'length': 18,
+                                                                        'name': 'hdop', 'precision': 10, 'sub_type': 0,
+                                                                        'type': 6, 'type_name': 'double precision'},
+                                                                       {'expression': '"badelf_spe"', 'length': 18,
+                                                                        'name': 'badelf_spe', 'precision': 10,
+                                                                        'sub_type': 0, 'type': 6,
+                                                                        'type_name': 'double precision'},
+                                                                       {'expression': '"NameTkline"', 'length': 35,
+                                                                        'name': 'NameTkline', 'precision': 0,
+                                                                        'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                       {'expression': '"FlightName"', 'length': 34,
+                                                                        'name': 'FlightName', 'precision': 0,
+                                                                        'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                       {'expression': '"TotalTime"', 'length': 18,
+                                                                        'name': 'TotalTime', 'precision': 10,
+                                                                        'sub_type': 0, 'type': 6,
+                                                                        'type_name': 'double precision'},
+                                                                       {'expression': '"layer"', 'length': 39,
+                                                                        'name': 'layer', 'precision': 0, 'sub_type': 0,
+                                                                        'type': 10, 'type_name': 'text'},
+                                                                       {'expression': '"demElev"', 'length': 18,
+                                                                        'name': 'demElev', 'precision': 10,
+                                                                        'sub_type': 0, 'type': 6,
+                                                                        'type_name': 'double precision'},
+                                                                       {'expression': '"AGL"', 'length': 16,
+                                                                        'name': 'AGL', 'precision': 0, 'sub_type': 0,
+                                                                        'type': 4, 'type_name': 'int8'},
+                                                                       {'expression': '"TimeInterval"', 'length': 18,
+                                                                        'name': 'TimeInterval', 'precision': 10,
+                                                                        'sub_type': 0, 'type': 6,
+                                                                        'type_name': 'double precision'}],
+                                                                   'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
             # ===========================================================================
             # Reproject the result to ESPG 3005
@@ -2551,7 +2613,8 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                                                          {'input': gpxMergeUnprojected_500m_reprojected,
                                                           'crs': QgsCoordinateReferenceSystem('EPSG:3005'),
                                                           'smax': 10000, '-z': False, '-w': False,
-                                                          'output': os.path.join(projectFolder, 'pointLessthan500m_Projected.gpkg'),
+                                                          'output': os.path.join(projectFolder,
+                                                                                 'pointLessthan500m_Projected.gpkg'),
                                                           'GRASS_REGION_PARAMETER': None,
                                                           'GRASS_SNAP_TOLERANCE_PARAMETER': -1,
                                                           'GRASS_MIN_AREA_PARAMETER': 0.0001,
@@ -2567,7 +2630,8 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             gpxMergeFlightLines = processing.run("native:mergevectorlayers",
                                                  {'LAYERS': flightLines,
                                                   'CRS': None,
-                                                  'OUTPUT': os.path.join(delFolder, 'allFlightLinesUnprojected')})['OUTPUT']
+                                                  'OUTPUT': os.path.join(delFolder, 'allFlightLinesUnprojected')})[
+                'OUTPUT']
             feedback.setProgressText(f'Reprojecting allFlightLines....')
 
             allFlightLines_Projected = processing.run("grass7:v.proj",
@@ -2610,10 +2674,16 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             uwr_fieldMapping = processing.run("native:refactorfields",
                                               {'INPUT': uwrBufferedPath,
                                                'FIELDS_MAPPING': [
-                                                   {'expression': f"{unit_no}", 'length': 14, 'name': 'UWR_NUMBER','precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
-                                                   {'expression': f"{unit_no_id}", 'length': 14, 'name': 'UWR_UNIT_N','precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
-                                                   {'expression': '"uwr_unique_id"', 'length': 100, 'name': 'uwr_unique_id', 'precision': 0, 'sub_type': 0, 'type': 10,'type_name': 'text'},
-                                                   {'expression': '"BUFF_DIST"', 'length': 0, 'name': 'BUFF_DIST', 'precision': 0, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'}],
+                                                   {'expression': f"{unit_no}", 'length': 14, 'name': 'UWR_NUMBER',
+                                                    'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                   {'expression': f"{unit_no_id}", 'length': 14, 'name': 'UWR_UNIT_N',
+                                                    'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                   {'expression': '"uwr_unique_id"', 'length': 100,
+                                                    'name': 'uwr_unique_id', 'precision': 0, 'sub_type': 0, 'type': 10,
+                                                    'type_name': 'text'},
+                                                   {'expression': '"BUFF_DIST"', 'length': 0, 'name': 'BUFF_DIST',
+                                                    'precision': 0, 'sub_type': 0, 'type': 6,
+                                                    'type_name': 'double precision'}],
                                                'OUTPUT': os.path.join(delFolder, 'fieldMapping')})['OUTPUT']
 
             # ===========================================================================
@@ -2627,22 +2697,25 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                                                           'METHOD': 0,
                                                           'DISCARD_NONMATCHING': True,
                                                           'PREFIX': '',
-                                                          'OUTPUT': os.path.join(delFolder,'Point_lessthan500Height_uwrbuffer')})['OUTPUT']
+                                                          'OUTPUT': os.path.join(delFolder,
+                                                                                 'Point_lessthan500Height_uwrbuffer')})[
+                'OUTPUT']
 
             # ==============================================================
             # If table is empty, ie, no point within uwr buffer zones, no need to get a table
             # ==============================================================
             rowCount = processing.run("qgis:basicstatisticsforfields",
-                                      {'INPUT_LAYER': pointLessthan500m_uwrbuffer + '|layername=Point_lessthan500Height_uwrbuffer',
-                                        'FIELD_NAME': 'time',
-                                        'OUTPUT_HTML_FILE': 'TEMPORARY_OUTPUT'})['COUNT']
+                                      {
+                                          'INPUT_LAYER': pointLessthan500m_uwrbuffer + '|layername=Point_lessthan500Height_uwrbuffer',
+                                          'FIELD_NAME': 'time',
+                                          'OUTPUT_HTML_FILE': 'TEMPORARY_OUTPUT'})['COUNT']
             if int(rowCount) == 0:
                 raise SystemExit("No flight lines intersect with uwr buffers")
 
             # ==============================================================
             # Add incurring severity according to buffer range
             # ==============================================================
-            allFlightPoints = processing.run("native:fieldcalculator",
+            incursionSeverityField = processing.run("native:fieldcalculator",
                                                     {'INPUT': pointLessthan500m_uwrbuffer,
                                                      'FIELD_NAME': 'IncursionSeverity',
                                                      'FIELD_TYPE': 2,
@@ -2656,8 +2729,9 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                                                                 + f"= {bufferDistList[2]} then \'Moderate\'\r\n"
                                                                 + 'when "BUFF_DIST"'
                                                                 + f"= {bufferDistList[3]} then \'Low\'\r\nend",
-                                                     'OUTPUT': os.path.join(projectFolder, 'allFlightPoints')})['OUTPUT']
-            feedback.setProgressText(f'{allFlightPoints} created')
+                                                     'OUTPUT': os.path.join(projectFolder, 'allFlightPoints')})[
+                'OUTPUT']
+            feedback.setProgressText(f'{incursionSeverityField} created')
 
             # ==============================================================
             # Split points of each incursion severity in different layers
@@ -2665,48 +2739,11 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             for severity in incursionSeverity:
                 name = "Below500m_" + str(severity)
                 diffISlyr = processing.run("native:extractbyexpression",
-                                           {'EXPRESSION': "IncursionSeverity = '" + str(incursionSeverity[severity]) + "'",
-                                            'INPUT': allFlightPoints,
+                                           {'EXPRESSION': "IncursionSeverity = '" + str(
+                                               incursionSeverity[severity]) + "'",
+                                            'INPUT': incursionSeverityField,
                                             'OUTPUT': os.path.join(projectFolder, name)})['OUTPUT']
                 feedback.setProgressText(f'{diffISlyr} created')
-
-
-            # ==============================================================
-            # Generate the allFlightPointStats report
-            # ==============================================================
-            statsPath = os.path.join(projectFolder, 'allPointsStats')
-            allFlightPointsStats_temp = processing.run("qgis:statisticsbycategories", {
-                'INPUT': allFlightPoints,
-                'VALUES_FIELD_NAME': 'TimeInterval',
-                'CATEGORIES_FIELD_NAME': ['NameTkline', 'FlightName', 'TotalTime', 'HeightRange', 'UWR_NUMBER', 'UWR_UNIT_N',
-                                          'BUFF_DIST', 'IncursionSeverity', "TimeInterv"],
-                'OUTPUT': os.path.join(delFolder, 'statsTemp')})['OUTPUT']
-
-            allFlightPointsStats_fieldMapping = processing.run("native:refactorfields",
-                                                        {'INPUT':allFlightPointsStats_temp,
-                                                         'FIELDS_MAPPING':[
-                                                             {'expression': '"NameTkline"','length': 21,'name': 'NameTkline','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"FlightName"','length': 34,'name': 'FlightName','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"TotalTime"','length': 0,'name': 'TotalTime','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
-                                                             {'expression': '"HeightRange"','length': 100,'name': 'HeightRange','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"UWR_NUMBER"','length': 14,'name': 'UWR_NUMBER','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"UWR_UNIT_N"','length': 14,'name': 'UWR_UNIT_N','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"BUFF_DIST"','length': 0,'name': 'BUFF_DIST','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
-                                                             {'expression': '"IncursionSeverity"','length': 100,'name': 'IncursionSeverity','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"TimeInterv"', 'length': 0,'name': 'TimeInterv', 'precision': 0, 'sub_type': 0,'type': 6, 'type_name': 'double precision'},
-                                                             {'expression': '"count"','length': 0,'name': 'Frequency','precision': 0,'sub_type': 0,'type': 2,'type_name': 'integer'}],
-                                                         'OUTPUT':'TEMPORARY_OUTPUT'})['OUTPUT']
-            allFlightPointsStats_final = processing.run("native:fieldcalculator", {'INPUT':allFlightPointsStats_fieldMapping,
-                                                                              'FIELD_NAME':'TotalIncursionTime',
-                                                                              'FIELD_TYPE':0,
-                                                                              'FIELD_LENGTH':100,
-                                                                              'FIELD_PRECISION':2,
-                                                                              'FORMULA':' "Frequency" * "TimeInterv" ',
-                                                                              'OUTPUT':statsPath})['OUTPUT']
-
-            lyr = QgsVectorLayer(allFlightPointsStats_final, 'allFlightPointStats', "ogr")
-
-            QgsVectorFileWriter.writeAsVectorFormat(lyr, statsPath ,"utf-8",driverName = "XLSX", layerOptions = ['GEOMETRY=AS_XYZ'])
             feedback.setProgressText('---Process completed successfully---')
 
         except QgsException as e:
@@ -2716,7 +2753,6 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
         finally:
             # shutil.rmtree(delFolder)
             feedback.setProgressText('Completed')
-
 
         total = 100.0 / origUWR_source.featureCount() if origUWR_source.featureCount() else 0
         features = origUWR_source.getFeatures()
