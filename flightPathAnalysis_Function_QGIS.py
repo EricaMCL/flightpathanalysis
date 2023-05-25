@@ -468,13 +468,12 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         minElevViewshed_delPath.append(agl_rasViewshed_clip + '.gpkg')
 
     projectFolder = os.path.split(tempFolder)[0]
-    viewshed_final = processing.run("native:mergevectorlayers", {'LAYERS': viewshedList,
-                                                                 'OUTPUT': os.path.join(projectFolder, 'viewshed')})[
-        'OUTPUT']
-    minElevViewshed_final = processing.run("native:mergevectorlayers", {'LAYERS': minElevViewshedList,
-                                                                        'OUTPUT': os.path.join(projectFolder,
-                                                                                               'minElevViewshed')})[
-        'OUTPUT']
+    viewshed_final = processing.run("native:mergevectorlayers",
+                                    {'LAYERS': viewshedList,
+                                    'OUTPUT': os.path.join(projectFolder, 'viewshed')})['OUTPUT']
+    minElevViewshed_final = processing.run("native:mergevectorlayers",
+                                           {'LAYERS': minElevViewshedList,
+                                            'OUTPUT': os.path.join(projectFolder,'minElevViewshed')})['OUTPUT']
 
     for feature in viewshed_delPath or minElevViewshed_delPath:
         try:
