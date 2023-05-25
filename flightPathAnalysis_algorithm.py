@@ -1929,7 +1929,8 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
         # to uniquely identify the feature sink, and must be included in the
         # dictionary returned by the processAlgorithm function.
         origUWR_source = self.parameterAsSource(parameters, self.origUWR, context)
-        origUWR = parameters['origUWR']
+        origUWRPath = parameters['origUWR']
+        origUWR = None
         projectFolder = parameters['projectFolder']
         gpxFolder = parameters['gpxFolder']
         DEM = parameters['DEM']
@@ -1988,7 +1989,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             # ===========================================================================
             # Check if the input vector includes invalid geometry
             # ===========================================================================
-            result = processing.run("qgis:checkvalidity", {'INPUT_LAYER': origUWR})
+            result = processing.run("qgis:checkvalidity", {'INPUT_LAYER': origUWRPath})
             errorCount = result['ERROR_COUNT']
             feedback.setProgressText(str(errorCount))
 
@@ -1996,14 +1997,14 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             # Fix the input geometry if invalid found, and replace the input for further process
             # ===========================================================================
             if errorCount > 0:
-                fixGeom = processing.run("native:fixgeometries",{'INPUT': origUWR, 'OUTPUT': 'TEMPORARY_OUTPUT'})
+                fixGeom = processing.run("native:fixgeometries",{'INPUT': origUWRPath, 'OUTPUT': 'TEMPORARY_OUTPUT'})
                 feedback.setProgressText('Geometry fixed')
                 origUWR = fixGeom['OUTPUT']
 
             else:
-                fixGeom = processing.run("native:fixgeometries",{'INPUT': parameters['origUWR'], 'OUTPUT': 'TEMPORARY_OUTPUT'})
-                feedback.setProgressText('Geometry fixed')
-                origUWR = fixGeom['OUTPUT']
+                #fixGeom = processing.run("native:fixgeometries",{'INPUT': parameters['origUWR'], 'OUTPUT': 'TEMPORARY_OUTPUT'})
+                feedback.setProgressText('No need to fix')
+                origUWR = origUWR_source
 
             # ==============================================================
             # Get list of relevant UWR
@@ -2083,7 +2084,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                     feedback.setProgressText(f'unBufferedUWR created in {unbufferedFL}')
                     requireUWRLayer = unbufferedFLPath
                 else:
-                    requireUWRLayer = origUWR
+                    requireUWRLayer = origUWRPath
                     feedback.setProgressText('requireUWRLayer = origUWR')
 
                 # ==============================================================
@@ -2614,7 +2615,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             # ===========================================================================
 
             uwr_fieldMapping = processing.run("native:refactorfields",
-                                              {'INPUT': uwrBufferedPath,
+                                              {'INPUT': uwrBufferedPath + '.gpkg',
                                                'FIELDS_MAPPING': [
                                                    {'expression': f"{unit_no}", 'length': 14, 'name': 'UWR_NUMBER','precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
                                                    {'expression': f"{unit_no_id}", 'length': 14, 'name': 'UWR_UNIT_N','precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
@@ -2655,13 +2656,13 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                                                      'FIELD_LENGTH': 100,
                                                      'FIELD_PRECISION': 0,
                                                      'FORMULA': 'case\r\nwhen "BUFF_DIST"'
-                                                                + f"= {bufferDistList[0]} then \'In UWR\'\r\n"
+                                                                + f"= {0} then \'In UWR\'\r\n"
                                                                 + 'when "BUFF_DIST" '
-                                                                + f"={bufferDistList[1]} then \'High\'\r\n"
+                                                                + f"={bufferDistList[0]} then \'High\'\r\n"
                                                                 + 'when "BUFF_DIST" '
-                                                                + f"= {bufferDistList[2]} then \'Moderate\'\r\n"
+                                                                + f"= {bufferDistList[1]} then \'Moderate\'\r\n"
                                                                 + 'when "BUFF_DIST"'
-                                                                + f"= {bufferDistList[3]} then \'Low\'\r\nend",
+                                                                + f"= {bufferDistList[2]} then \'Low\'\r\nend",
                                                      'OUTPUT': os.path.join(projectFolder, 'allFlightPoints')})['OUTPUT']
             feedback.setProgressText(f'{allFlightPoints} created')
 
@@ -2691,7 +2692,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             allFlightPointsStats_fieldMapping = processing.run("native:refactorfields",
                                                         {'INPUT':allFlightPointsStats_temp,
                                                          'FIELDS_MAPPING':[
-                                                             {'expression': '"NameTkline"','length': 21,'name': 'NameTkline','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"NameTkline"','length': 50,'name': 'NameTkline','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                              {'expression': '"FlightName"','length': 34,'name': 'FlightName','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                              {'expression': '"TotalTime"','length': 0,'name': 'TotalTime','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
                                                              {'expression': '"HeightRange"','length': 100,'name': 'HeightRange','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},

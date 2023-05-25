@@ -157,13 +157,12 @@ def findBufferRange(UseToErasePath, ToErasePath, uniqueIDFields, delFolder, buff
                                               'INPUT': ToEraseLyr,
                                               'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
-        out_features = delFolder + "\\outfeature" + str(out_count) + '__' + str(bufferDist)
+        out_features = os.path.join(delFolder , "outfeature" + str(out_count) + '__' + str(bufferDist))
         processing.run("native:difference", {'INPUT': ToEraseLyr_selected,
                                              'OVERLAY': useToEraseLyr_selected,
                                              'OUTPUT': out_features, 'GRID_SIZE': None})
 
-        bufferedFeatures.append(
-            out_features + '.gpkg|layername=' + "outfeature" + str(out_count) + '__' + str(bufferDist))
+        bufferedFeatures.append(out_features + '.gpkg')
         bufferedFeatures_delPath.append(out_features + '.gpkg')
 
     projectFolder = os.path.split(delFolder)[0]
