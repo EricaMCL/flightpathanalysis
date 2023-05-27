@@ -2506,13 +2506,13 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                 # ===========================================================================
                 timeIntervalField = processing.run("native:fieldcalculator",
                                                    {'INPUT': pointLessthan500mExtracted,
-                                                    'FIELD_NAME': 'TimeInterval',
+                                                    'FIELD_NAME': 'TInterval',
                                                     'FIELD_TYPE': 0,
                                                     'FIELD_LENGTH': 100,
                                                     'FIELD_PRECISION': 0,
                                                     'FORMULA': f"'{timeIntervalDict[interval][0]}'",
                                                     'OUTPUT': pointLessthan500m_UnprojectedPath})['OUTPUT']
-                feedback.setProgressText(f'TimeInterval field added')
+                feedback.setProgressText(f'TInterval field added')
                 unprojectedGPX.append(timeIntervalField + f'|layername=PointLessthan500m_Unprojected{interval}')
                 feedback.setProgressText(f'Unprojected layer:{timeIntervalField} appended')
             feedback.setProgressText(f'{unprojectedGPX}')
@@ -2541,13 +2541,13 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                                                        {'expression': '"time"', 'length': 23, 'name': 'time', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
                                                        {'expression': '"hdop"', 'length': 18, 'name': 'hdop', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
                                                        {'expression': '"badelf_spe"', 'length': 18, 'name': 'badelf_spe', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
-                                                       {'expression': '"NameTkline"', 'length': 35, 'name': 'NameTkline', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                       {'expression': '"NameTkline"', 'length': 50, 'name': 'NameTkline', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
                                                        {'expression': '"FlightName"', 'length': 34, 'name': 'FlightName', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
                                                        {'expression': '"TotalTime"', 'length': 18, 'name': 'TotalTime', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
                                                        {'expression': '"layer"', 'length': 39, 'name': 'layer', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
                                                        {'expression': '"demElev"', 'length': 18, 'name': 'demElev', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
                                                        {'expression': '"AGL"', 'length': 16, 'name': 'AGL', 'precision': 0, 'sub_type': 0, 'type': 4, 'type_name': 'int8'},
-                                                       {'expression': '"TimeInterval"', 'length': 18, 'name': 'TimeInterval', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'}],
+                                                       {'expression': '"TInterval"', 'length': 18, 'name': 'TInterval', 'precision': 10, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'}],
                                     'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
             # ===========================================================================
@@ -2617,8 +2617,8 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             uwr_fieldMapping = processing.run("native:refactorfields",
                                               {'INPUT': uwrBufferedPath + '.gpkg',
                                                'FIELDS_MAPPING': [
-                                                   {'expression': f"{unit_no}", 'length': 14, 'name': 'UWR_NUMBER','precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
-                                                   {'expression': f"{unit_no_id}", 'length': 14, 'name': 'UWR_UNIT_N','precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                   {'expression': f"{unit_no}", 'length': 14, 'name': f'{unit_no}','precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                   {'expression': f"{unit_no_id}", 'length': 14, 'name': f'{unit_no_id}','precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
                                                    {'expression': '"uwr_unique_id"', 'length': 100, 'name': 'uwr_unique_id', 'precision': 0, 'sub_type': 0, 'type': 10,'type_name': 'text'},
                                                    {'expression': '"BUFF_DIST"', 'length': 0, 'name': 'BUFF_DIST', 'precision': 0, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'}],
                                                'OUTPUT': os.path.join(delFolder, 'fieldMapping')})['OUTPUT']
@@ -2684,9 +2684,9 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             statsPath = os.path.join(projectFolder, 'allPointsStats')
             allFlightPointsStats_temp = processing.run("qgis:statisticsbycategories", {
                 'INPUT': allFlightPoints,
-                'VALUES_FIELD_NAME': 'TimeInterval',
-                'CATEGORIES_FIELD_NAME': ['NameTkline', 'FlightName', 'TotalTime', 'HeightRange', 'UWR_NUMBER', 'UWR_UNIT_N',
-                                          'BUFF_DIST', 'IncursionSeverity', "TimeInterv"],
+                'VALUES_FIELD_NAME': 'TInterval',
+                'CATEGORIES_FIELD_NAME': ['NameTkline', 'FlightName', 'TotalTime', 'HeightRange', f'{unit_no}', f'{unit_no_id}',
+                                          'BUFF_DIST', 'IncursionSeverity', "TInterval"],
                 'OUTPUT': os.path.join(delFolder, 'statsTemp')})['OUTPUT']
 
             allFlightPointsStats_fieldMapping = processing.run("native:refactorfields",
@@ -2696,19 +2696,20 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                                                              {'expression': '"FlightName"','length': 34,'name': 'FlightName','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                              {'expression': '"TotalTime"','length': 0,'name': 'TotalTime','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
                                                              {'expression': '"HeightRange"','length': 100,'name': 'HeightRange','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"UWR_NUMBER"','length': 14,'name': 'UWR_NUMBER','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"UWR_UNIT_N"','length': 14,'name': 'UWR_UNIT_N','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': f"{unit_no}",'length': 14,'name': f'{unit_no}','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': f"{unit_no_id}",'length': 14,'name': f'{unit_no_id}','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                              {'expression': '"BUFF_DIST"','length': 0,'name': 'BUFF_DIST','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
                                                              {'expression': '"IncursionSeverity"','length': 100,'name': 'IncursionSeverity','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"TimeInterv"', 'length': 0,'name': 'TimeInterv', 'precision': 0, 'sub_type': 0,'type': 6, 'type_name': 'double precision'},
+                                                             {'expression': '"TInterval"', 'length': 0,'name': 'TInterval', 'precision': 0, 'sub_type': 0,'type': 6, 'type_name': 'double precision'},
                                                              {'expression': '"count"','length': 0,'name': 'Frequency','precision': 0,'sub_type': 0,'type': 2,'type_name': 'integer'}],
                                                          'OUTPUT':'TEMPORARY_OUTPUT'})['OUTPUT']
+
             allFlightPointsStats_final = processing.run("native:fieldcalculator", {'INPUT':allFlightPointsStats_fieldMapping,
                                                                               'FIELD_NAME':'TotalIncursionTime',
                                                                               'FIELD_TYPE':0,
                                                                               'FIELD_LENGTH':100,
                                                                               'FIELD_PRECISION':2,
-                                                                              'FORMULA':' "Frequency" * "TimeInterv" ',
+                                                                              'FORMULA':' "Frequency" * "TInterval" ',
                                                                               'OUTPUT':statsPath})['OUTPUT']
 
             lyr = QgsVectorLayer(allFlightPointsStats_final, 'allFlightPointStats', "ogr")
