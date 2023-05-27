@@ -156,14 +156,19 @@ def findBufferRange(UseToErasePath, ToErasePath, uniqueIDFields, delFolder, buff
                                              {'EXPRESSION': expression,
                                               'INPUT': ToEraseLyr,
                                               'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
-
-        out_features = os.path.join(delFolder , "outfeature" + str(out_count) + '__' + str(bufferDist))
+        outFCFolder = os.path.join(delFolder, 'out_features')
+        if not os.path.exists(outFCFolder):
+            try:
+                os.mkdir(outFCFolder)
+            except:
+                continue
+        out_features = os.path.join(outFCFolder , 'outFeature' + str(out_count) + '__' + str(bufferDist))
         processing.run("native:difference", {'INPUT': ToEraseLyr_selected,
                                              'OVERLAY': useToEraseLyr_selected,
                                              'OUTPUT': out_features, 'GRID_SIZE': None})
 
         bufferedFeatures.append(out_features + '.gpkg')
-        bufferedFeatures_delPath.append(out_features + '.gpkg')
+        #bufferedFeatures_delPath.append(out_features + '.gpkg')
 
     projectFolder = os.path.split(delFolder)[0]
     # merge all outputs
@@ -171,11 +176,14 @@ def findBufferRange(UseToErasePath, ToErasePath, uniqueIDFields, delFolder, buff
     output = processing.run("native:mergevectorlayers", {'LAYERS': bufferedFeatures,
                                                          'OUTPUT': outputPath})['OUTPUT']
 
-    for feature in bufferedFeatures_delPath:
-        try:
-            os.remove(feature)
-        except:
-            continue
+    for fname in os.listdir(outFCFolder):
+        if fname.startswith('outFeature'):
+            try:
+                os.remove(os.path.join(outFCFolder, fname))
+            except:
+                continue
+
+
     # outputLyr = output + '|layername=' + 'rawBuffer_' + str(bufferDist) + 'only'
 
     return output

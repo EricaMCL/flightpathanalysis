@@ -2702,7 +2702,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                                                              {'expression': '"IncursionSeverity"','length': 100,'name': 'IncursionSeverity','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                              {'expression': '"TInterval"', 'length': 0,'name': 'TInterval', 'precision': 0, 'sub_type': 0,'type': 6, 'type_name': 'double precision'},
                                                              {'expression': '"count"','length': 0,'name': 'Frequency','precision': 0,'sub_type': 0,'type': 2,'type_name': 'integer'}],
-                                                         'OUTPUT':'TEMPORARY_OUTPUT'})['OUTPUT']
+                                                         'OUTPUT':os.path.join(delFolder, 'tempfield')})['OUTPUT']
 
             allFlightPointsStats_final = processing.run("native:fieldcalculator", {'INPUT':allFlightPointsStats_fieldMapping,
                                                                               'FIELD_NAME':'TotalIncursionTime',
@@ -2744,7 +2744,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
 
-        return None
+        return {'uwrBuffered': uwrBuffered, 'allFlightPoints' : allFlightPoints, 'allFlightPointStats' : allFlightPointsStats_final}
 
     def name(self):
         """
