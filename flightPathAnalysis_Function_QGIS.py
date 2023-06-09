@@ -395,7 +395,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         UWRVertices_merge = processing.run("native:mergevectorlayers",
                                            {'LAYERS': [UWRDEMpoi_Selected, vertice_Selected],
                                             'CRS': None,
-                                            'OUTPUT': os.path.join(tempFolder, UWR_ViewshedObsPoints)})['OUTPUT']
+                                            'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
         # ==============================================================
         # Make raster viewshed
@@ -424,7 +424,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         viewshedRasToPoly = processing.run("native:pixelstopolygons",
                                            {'INPUT_RASTER': rasViewshed,
                                             'RASTER_BAND': 1, 'FIELD_NAME': 'VALUE',
-                                            'OUTPUT': os.path.join(tempFolder, polygonViewshed)})['OUTPUT']
+                                            'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
         # ==============================================================
         # Select all direct viewshed area (visible area)
@@ -449,7 +449,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         agl_rasViewshedRasToPoly = processing.run("native:pixelstopolygons",
                                                   {'INPUT_RASTER': agl_rasViewshed,
                                                    'RASTER_BAND': 1, 'FIELD_NAME': 'VALUE',
-                                                   'OUTPUT': os.path.join(tempFolder, polygon_aglViewshed)})['OUTPUT']
+                                                   'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
         agl_rasViewshed_dis = processing.run("native:dissolve", {'INPUT': agl_rasViewshedRasToPoly,
                                                                  'FIELD': ['VALUE'], 'SEPARATE_DISJOINT': False,

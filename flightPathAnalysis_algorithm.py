@@ -1734,14 +1734,14 @@ class finalPointsStats(QgsProcessingAlgorithm):
             # unit_unique_field, field that combines uwr number and uwr unit number
             # ==============================================================
             unit_no = "UWR_NUMBER"
-            unit_no_id = "UWR_UNIT_NUMBER"
+            unit_no_id = "UWR_UNIT_N"
             uwr_unique_Field = "uwr_unique"
 
             LOS_finalPointsStats_temp = processing.run("qgis:statisticsbycategories", {
                 'INPUT': LOS_finalPoints,
-                'VALUES_FIELD_NAME': 'TimeInterv',
+                'VALUES_FIELD_NAME': 'TInterval',
                 'CATEGORIES_FIELD_NAME': ['NameTkline', 'FlightName', 'TotalTime', 'HeightRange', unit_no, unit_no_id,
-                                          'BUFF_DIST', 'IncursionSeverity', "TimeInterv"],
+                                          'BUFF_DIST', 'IncursionSeverity', "TInterval"],
                 'OUTPUT': os.path.join(delFolder, 'LOS_statsTemp')})['OUTPUT']
 
             LOS_finalPointsStats_fieldMapping = processing.run("native:refactorfields",
@@ -1752,10 +1752,10 @@ class finalPointsStats(QgsProcessingAlgorithm):
                                                              {'expression': '"TotalTime"','length': 0,'name': 'TotalTime','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
                                                              {'expression': '"HeightRange"','length': 100,'name': 'HeightRange','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                              {'expression': '"UWR_NUMBER"','length': 14,'name': 'UWR_NUMBER','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"UWR_UNIT_NUMBER"','length': 14,'name': 'UWR_UNIT_NUMBER','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
+                                                             {'expression': '"UWR_UNIT_N"','length': 14,'name': 'UWR_UNIT_NUMBER','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
                                                              {'expression': '"BUFF_DIST"','length': 0,'name': 'BUFF_DIST','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
                                                              {'expression': '"IncursionSeverity"','length': 100,'name': 'IncursionSeverity','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"sum"','length': 0,'name': 'TimeInterval','precision': 0,'sub_type': 0,'type': 2,'type_name': 'integer'}],
+                                                             {'expression': '"sum"','length': 0,'name': 'TInterval','precision': 0,'sub_type': 0,'type': 2,'type_name': 'integer'}],
                                                          'OUTPUT':os.path.join(delFolder, 'tempStats')})['OUTPUT']
 
 
@@ -2723,6 +2723,260 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
 
         finally:
             # shutil.rmtree(delFolder)
+            feedback.setProgressText('Completed')
+
+        # ===========================================================================
+        # Step.3 LOS
+        # ===========================================================================
+        try:
+
+            # ==============================================================
+            # Get list of uwr that have viewshed created
+            # ==============================================================
+            viewshedUWRset = set()
+            UWRRequireViewshedSet = None
+            if existedViewshed != None:
+                viewshed_source = self.parameterAsSource(parameters, self.viewshed, context)
+                viewshedFieldList = viewshed_source.fields().names()
+                uwr_unique_Field_index = viewshedFieldList.index(uwr_unique_Field)
+                feedback.setProgressText(f'{uwr_unique_Field_index}')
+                for feature in viewshed_source.getFeatures():
+                    uwr_unique_Field_value = f'{feature.attributes()[uwr_unique_Field_index]}'
+                    viewshedUWRset.add(uwr_unique_Field_value)
+                UWRRequireViewshedSet = uwrSet - viewshedUWRset
+            else:
+                UWRRequireViewshedSet = uwrSet
+                feedback.setProgressText(f'No existed viewshed layer')
+
+            # ==============================================================
+            # Create viewshed for uwr that doesn't have any. Either makes a new final viewshed or appends to the old one
+            # ==============================================================
+            viewshed = None
+            minElevViewshed = None
+            if len(UWRRequireViewshedSet) > 0:
+                maxBuffRange = 1500
+                feedback.setProgressText(f'MAKING viewshed layer')
+                viewshedCreated = makeViewshed(UWRRequireViewshedSet, uwrBuffered, maxBuffRange, unit_no, unit_no_id, uwr_unique_Field, delFolder, DEM, existedViewshed, existedMinElevViewshed)
+                feedback.setProgressText(f'{viewshedCreated}')
+                feedback.setProgressText(f'{UWRRequireViewshedSet}')
+                viewshed = viewshedCreated[0]
+                minElevViewshed = viewshedCreated[1]
+
+            else:
+                viewshed = existedViewshed
+                minElevViewshed = existedMinElevViewshed
+                feedback.setProgressText('No need to make viewsheds')
+
+            # ==============================================================
+            #
+            # ==============================================================
+            finalPointsSet = set()
+
+            # ==============================================================
+            # Count of points intersecting with the viewshed for each UWR
+            # ==============================================================
+            viewshedPointCount = {}
+
+            # ==============================================================
+            # List of layers with points that are not terrain masked
+            # ==============================================================
+            uwr_notmasked_List = []
+
+            for uwr in uwrSet:
+                nameUWR = replaceNonAlphaNum(uwr, "_")
+                points_aglViewshed = 'points_aglViewshed' + nameUWR
+                uwr_notmasked = 'notMasked' + nameUWR
+                feedback.setProgressText('Finding LOS flight points fpr uwr')
+                LOS_uwrFlightPointsLyr = 'LOS_uwrFlightPoints'
+                uwrPointsStatsTime = datetime.datetime.now()
+                uwrFlightPointsSet = set()
+                NotLOSSet = set()
+
+                uwr_no = uwr[:uwr.find("__")]
+                uwr_no_id = uwr[uwr.find("__") + 2:]
+
+                # ==============================================================
+                # Check to find the right query depending on if uwr fields are integer or text
+                # ==============================================================
+                minElevViewshedLyr = QgsVectorLayer((minElevViewshed), "", "ogr")
+                expression = '(\"' + uwr_unique_Field + '\" = ' + uwr + ')'
+
+                for feature in minElevViewshedLyr.getFeatures():
+                    minElevViewshedLyr_fields = minElevViewshedLyr.fields().names()
+                    feedback.setProgressText(f'{minElevViewshedLyr_fields}')
+                    unit_no_index = minElevViewshedLyr_fields.index(unit_no)
+                    unit_no_attribute = feature.attributes()[unit_no_index]
+                    unit_no_id_index = minElevViewshedLyr_fields.index(unit_no_id)
+                    unit_no_id_attribute = feature.attributes()[unit_no_id_index]
+
+                    if type(unit_no_attribute) == int:
+                        expression = '(\"' + unit_no + '\" = ' + uwr_no + ')'
+                    else:
+                        expression = '(\"' + unit_no + '\" = \'' + uwr_no + "')"
+
+                    if type(unit_no_id_attribute) == int:
+                        expression += ' AND (\"' + unit_no_id + '\" = ' + uwr_no_id + ')'
+                    else:
+                        expression += ' AND (\"' + unit_no_id + '\" = \'' + uwr_no_id + "')"
+
+                    break
+                feedback.setProgressText(f'{expression}')
+
+                minElevViewshedLyr_selected = processing.run("native:extractbyexpression",
+                                                     {'EXPRESSION': expression + " AND (VALUE <> 0)",
+                                                      'INPUT': minElevViewshedLyr,
+                                                      'OUTPUT': os.path.join(delFolder, 'vhSelected' + uwr)})['OUTPUT']
+                feedback.setProgressText(f'minElevViewshed_Lyr_selected')
+
+                uwrFlightPoints_selected = processing.run("native:extractbyexpression",
+                                                     {'EXPRESSION': expression,
+                                                      'INPUT': allFlightPoints,
+                                                      'OUTPUT': os.path.join(delFolder, 'uwrFlightPoints_selected' + uwr)})['OUTPUT']
+                feedback.setProgressText(f'{uwrFlightPoints_selected}')
+                # ==============================================================
+                # all flight points associated with the UWR
+                # ==============================================================
+                uwrFlightPoints_selectedLyr = QgsVectorLayer((uwrFlightPoints_selected), "", "ogr")
+                for feature in uwrFlightPoints_selectedLyr.getFeatures():
+                    uwrFlightPoints_selectedLyr_fields = uwrFlightPoints_selectedLyr.fields().names()
+                    fidIndex = uwrFlightPoints_selectedLyr_fields.index('fid')
+                    fid_attribute = feature.attributes()[fidIndex]
+                    uwrFlightPointsSet.add(fid_attribute)
+                #feedback.setProgressText(f'uwrFlightPointsSet: {uwrFlightPointsSet}')
+
+                # ==============================================================
+                # Spatial join points with points that aren't in the direct viewshed but within the buffer zone
+                # ==============================================================
+                poisAglViewshed = processing.run("native:joinattributesbylocation",
+                               {'INPUT':uwrFlightPoints_selected ,
+                                'PREDICATE': [0],
+                                'JOIN': minElevViewshedLyr_selected,
+                                'JOIN_FIELDS': [], 'METHOD': 1, 'DISCARD_NONMATCHING': False, 'PREFIX': '',
+                                'OUTPUT': os.path.join(delFolder, 'pointAGL' + uwr)})['OUTPUT']
+
+                # ==============================================================
+                # Getting the points that are terrain masked
+                # ==============================================================
+                points_aglViewshed_NumSet = set()
+                poisAglViewshedLyr = QgsVectorLayer((poisAglViewshed), "", "ogr")
+                for feature in poisAglViewshedLyr.getFeatures():
+                    poisAglViewshedLyr_fields = poisAglViewshedLyr.fields().names()
+                    fidIndex = poisAglViewshedLyr_fields.index('fid')
+                    fid_attribute = feature.attributes()[fidIndex]
+                    aglIndex = poisAglViewshedLyr_fields.index('AGL')
+                    agl_attribute = feature.attributes()[aglIndex]
+                    valueIndex = poisAglViewshedLyr_fields.index('VALUE')
+                    value_attribute = feature.attributes()[valueIndex]
+                    if type(value_attribute) is not None and agl_attribute < value_attribute:
+                        points_aglViewshed_NumSet.add(str(fid_attribute))
+                #feedback.setProgressText(f'points_aglViewshed_NumSet: {points_aglViewshed_NumSet}')
+
+                if len(points_aglViewshed_NumSet) == 0:
+                    finalSQL = None
+
+                else:
+                    terrainMaskPoi = ','.join(points_aglViewshed_NumSet)
+                    finalSQL = "fid NOT IN (" + terrainMaskPoi + ")"
+                    uwr_notmasked_selected = processing.run("native:extractbyexpression",
+                                                        {'EXPRESSION': finalSQL,
+                                                         'INPUT': poisAglViewshed,
+                                                         'OUTPUT': os.path.join(delFolder, uwr_notmasked)})['OUTPUT']
+                    # ==============================================================
+                    # Put into a list of all the layers of points that are terrain masked
+                    # ==============================================================
+                    uwr_notmasked_List.append(uwr_notmasked_selected)
+                    feedback.setProgressText(f'{uwr_notmasked_selected}')
+
+
+            # ==============================================================
+            # Create final layer of all points that aren't terrain masked
+            # ==============================================================
+            if len(uwr_notmasked_List) != 0:
+                nonTerrainMaskedPoi_merge = processing.run("native:mergevectorlayers",
+                                               {'LAYERS': uwr_notmasked_List,
+                                                'CRS': None,
+                                                'OUTPUT': os.path.join(projectFolder, 'LOS_uwrFlightPoints')})['OUTPUT']
+            else:
+                nonTerrainMaskedPoi_merge = uwr_notmasked_List[0]
+
+            feedback.setProgressText('Merged all non terrain masked points together')
+
+            # ==============================================================
+            # Get count of points that are in direct viewshed
+            # ==============================================================
+            LOS_uwrFlightPoints_selected = processing.run("native:extractbyexpression",
+                                                    {'EXPRESSION': " VALUE is Null ",
+                                                     'INPUT': nonTerrainMaskedPoi_merge,
+                                                     'OUTPUT': os.path.join(projectFolder, 'LOS_uwrFlightPoints_selected')})['OUTPUT']
+
+            poi_underDirectViewshed_count = processing.run("qgis:basicstatisticsforfields", {
+                'INPUT_LAYER': LOS_uwrFlightPoints_selected,
+                'FIELD_NAME': 'fid', 'OUTPUT_HTML_FILE': 'TEMPORARY_OUTPUT'})['COUNT']
+            feedback.setProgressText(f'Points under direct viewshed: {poi_underDirectViewshed_count}')
+            viewshedPointCount[uwr] = poi_underDirectViewshed_count
+
+            # ==============================================================
+            # Getting count found in direct viewshed into excel
+            # ==============================================================
+            #dfViewshed = pd.DataFrame.from_dict(viewshedPointCount, orient='index')
+            #dfViewshed.columns = ['points found in viewshed']
+            #feedback.setProgressText(f'ViewshedPointCount: {viewshedPointCount}')
+            #dfViewshed.to_excel(os.path.join(projectFolder, 'ViewshedPointCount.xlsx'))
+            #feedback.setProgressText(f'ViewshedPointCount.xlsx created in {projectFolder}')
+
+            LOS_finalPointsStats_temp = processing.run("qgis:statisticsbycategories", {
+                'INPUT': LOS_uwrFlightPoints_selected,
+                'VALUES_FIELD_NAME': 'TInterval',
+                'CATEGORIES_FIELD_NAME': ['NameTkline', 'FlightName', 'TotalTime', 'HeightRange', unit_no, unit_no_id,
+                                          'BUFF_DIST', 'IncursionSeverity', "TInterval"],
+                'OUTPUT': os.path.join(delFolder, 'LOS_statsTemp')})['OUTPUT']
+
+            LOS_finalPointsStats_fieldMapping = processing.run("native:refactorfields",
+                                                               {'INPUT': LOS_finalPointsStats_temp,
+                                                                'FIELDS_MAPPING': [
+                                                                    {'expression': '"NameTkline"', 'length': 21,
+                                                                     'name': 'NameTkline', 'precision': 0,
+                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"FlightName"', 'length': 34,
+                                                                     'name': 'FlightName', 'precision': 0,
+                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"TotalTime"', 'length': 0,
+                                                                     'name': 'TotalTime', 'precision': 0, 'sub_type': 0,
+                                                                     'type': 6, 'type_name': 'double precision'},
+                                                                    {'expression': '"HeightRange"', 'length': 100,
+                                                                     'name': 'HeightRange', 'precision': 0,
+                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"UWR_NUMBER"', 'length': 14,
+                                                                     'name': 'UWR_NUMBER', 'precision': 0,
+                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"UWR_UNIT_N"', 'length': 14,
+                                                                     'name': 'UWR_UNIT_NUMBER', 'precision': 0,
+                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"BUFF_DIST"', 'length': 0,
+                                                                     'name': 'BUFF_DIST', 'precision': 0, 'sub_type': 0,
+                                                                     'type': 6, 'type_name': 'double precision'},
+                                                                    {'expression': '"IncursionSeverity"', 'length': 100,
+                                                                     'name': 'IncursionSeverity', 'precision': 0,
+                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"sum"', 'length': 0,
+                                                                     'name': 'TInterval', 'precision': 0, 'sub_type': 0,
+                                                                     'type': 2, 'type_name': 'integer'}],
+                                                                'OUTPUT': os.path.join(delFolder, 'tempStats')})[
+                'OUTPUT']
+
+            lyr = QgsVectorLayer(LOS_finalPointsStats_fieldMapping, 'LOS_finalPointsStats', "ogr")
+
+            QgsVectorFileWriter.writeAsVectorFormat(lyr, statsPath, "utf-8", driverName="XLSX",
+                                                    layerOptions=['GEOMETRY=AS_XYZ'])
+
+
+            feedback.setProgressText('---Process completed successfully---')
+
+        except QgsException as e:
+            feedback.setProgressText('Something is wrong')
+            feedback.setProgressText(f'{e}')
+
+        finally:
             feedback.setProgressText('Completed')
 
 
