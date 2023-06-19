@@ -2951,7 +2951,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             LOS_finalPointsStats_fieldMapping = processing.run("native:refactorfields",
                                                                {'INPUT': LOS_finalPointsStats_temp,
                                                                 'FIELDS_MAPPING': [
-                                                                    {'expression': '"NameTkline"', 'length': 21,
+                                                                    {'expression': '"NameTkline"', 'length': 35,
                                                                      'name': 'NameTkline', 'precision': 0,
                                                                      'sub_type': 0, 'type': 10, 'type_name': 'text'},
                                                                     {'expression': '"FlightName"', 'length': 34,
