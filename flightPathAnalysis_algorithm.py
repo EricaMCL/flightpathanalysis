@@ -2222,7 +2222,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
         finally:
             #shutil.rmtree(delFolder)
             #feedback.setProgressText(f'{delFolder} deleted')
-            feedback.setProgressText('Completed')
+            feedback.setProgressText('Step 1 - uwrBuffered Completed')
 
         # ===========================================================================
         # Step.2 Flightpath conversion
@@ -2723,7 +2723,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
 
         finally:
             # shutil.rmtree(delFolder)
-            feedback.setProgressText('Completed')
+            feedback.setProgressText('Step 2&3 - Flightpath conversion and general stats Completed')
 
         # ===========================================================================
         # Step.3 LOS
@@ -2781,12 +2781,11 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             # List of layers with points that are not terrain masked
             # ==============================================================
             uwr_notmasked_List = []
-
+            feedback.setProgressText('Finding LOS flight points fpr uwr')
             for uwr in uwrSet:
                 nameUWR = replaceNonAlphaNum(uwr, "_")
                 points_aglViewshed = 'points_aglViewshed' + nameUWR
                 uwr_notmasked = 'notMasked' + nameUWR
-                feedback.setProgressText('Finding LOS flight points fpr uwr')
                 LOS_uwrFlightPointsLyr = 'LOS_uwrFlightPoints'
                 uwrPointsStatsTime = datetime.datetime.now()
                 uwrFlightPointsSet = set()
@@ -2820,19 +2819,19 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                         expression += ' AND (\"' + unit_no_id + '\" = \'' + uwr_no_id + "')"
 
                     break
-                feedback.setProgressText(f'{expression}')
+                #feedback.setProgressText(f'{expression}')
 
                 minElevViewshedLyr_selected = processing.run("native:extractbyexpression",
                                                      {'EXPRESSION': expression + " AND (VALUE <> 0)",
                                                       'INPUT': minElevViewshedLyr,
                                                       'OUTPUT': os.path.join(delFolder, 'vhSelected' + uwr)})['OUTPUT']
-                feedback.setProgressText(f'minElevViewshed_Lyr_selected')
+                #feedback.setProgressText(f'minElevViewshed_Lyr_selected')
 
                 uwrFlightPoints_selected = processing.run("native:extractbyexpression",
                                                      {'EXPRESSION': expression,
                                                       'INPUT': allFlightPoints,
                                                       'OUTPUT': os.path.join(delFolder, 'uwrFlightPoints_selected' + uwr)})['OUTPUT']
-                feedback.setProgressText(f'{uwrFlightPoints_selected}')
+                #feedback.setProgressText(f'{uwrFlightPoints_selected}')
                 # ==============================================================
                 # all flight points associated with the UWR
                 # ==============================================================
@@ -2842,7 +2841,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                     fidIndex = uwrFlightPoints_selectedLyr_fields.index('fid')
                     fid_attribute = feature.attributes()[fidIndex]
                     uwrFlightPointsSet.add(fid_attribute)
-                #feedback.setProgressText(f'uwrFlightPointsSet: {uwrFlightPointsSet}')
+                feedback.setProgressText(f'uwrFlightPointsSet: {uwrFlightPointsSet}')
 
                 # ==============================================================
                 # Spatial join points with points that aren't in the direct viewshed but within the buffer zone
@@ -2869,7 +2868,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                     value_attribute = feature.attributes()[valueIndex]
                     if type(value_attribute) is not None and agl_attribute < value_attribute:
                         points_aglViewshed_NumSet.add(str(fid_attribute))
-                #feedback.setProgressText(f'points_aglViewshed_NumSet: {points_aglViewshed_NumSet}')
+                feedback.setProgressText(f'points_aglViewshed_NumSet: {points_aglViewshed_NumSet}')
 
                 if len(points_aglViewshed_NumSet) == 0:
                     finalSQL = None
@@ -2885,7 +2884,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                     # Put into a list of all the layers of points that are terrain masked
                     # ==============================================================
                     uwr_notmasked_List.append(uwr_notmasked_selected)
-                    feedback.setProgressText(f'{uwr_notmasked_selected}')
+                    #feedback.setProgressText(f'{uwr_notmasked_selected}')
 
 
             # ==============================================================
@@ -2930,7 +2929,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                 'CATEGORIES_FIELD_NAME': ['NameTkline', 'FlightName', 'TotalTime', 'HeightRange', unit_no, unit_no_id,
                                           'BUFF_DIST', 'IncursionSeverity', "TInterval"],
                 'OUTPUT': os.path.join(delFolder, 'LOS_statsTemp')})['OUTPUT']
-
+            losStatsPath = os.path.join(projectFolder, 'LOS_finalPointsStats')
             LOS_finalPointsStats_fieldMapping = processing.run("native:refactorfields",
                                                                {'INPUT': LOS_finalPointsStats_temp,
                                                                 'FIELDS_MAPPING': [
@@ -2966,7 +2965,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
 
             lyr = QgsVectorLayer(LOS_finalPointsStats_fieldMapping, 'LOS_finalPointsStats', "ogr")
 
-            QgsVectorFileWriter.writeAsVectorFormat(lyr, statsPath, "utf-8", driverName="XLSX",
+            QgsVectorFileWriter.writeAsVectorFormat(lyr, losStatsPath, "utf-8", driverName="XLSX",
                                                     layerOptions=['GEOMETRY=AS_XYZ'])
 
 
@@ -2977,7 +2976,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             feedback.setProgressText(f'{e}')
 
         finally:
-            feedback.setProgressText('Completed')
+            feedback.setProgressText('Step 4&5 - Los Analysis and final stats Completed')
 
 
         total = 100.0 / origUWR_source.featureCount() if origUWR_source.featureCount() else 0
