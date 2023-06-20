@@ -2735,12 +2735,11 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             # ==============================================================
             allFlightPointslyr = QgsVectorLayer(allFlightPoints, 'allFlightPointslyr', "ogr")
             allFlightPointsFieldList = allFlightPointslyr.fields().names()
-            unit_no_index = allFlightPointsFieldList.index(unit_no)
-            unit_no_id_index = allFlightPointsFieldList.index(unit_no_id)
-            feedback.setProgressText(f'{unit_no_id_index, unit_no_index}')
+            uwr_unique_index = allFlightPointsFieldList.index(uwr_unique_Field)
+            feedback.setProgressText(f'{uwr_unique_index}')
             flightPTUwrSet = set()
             for feature in allFlightPointslyr.getFeatures():
-                uwr_unique_Field_value = f'{feature.attributes()[unit_no_index]}__{feature.attributes()[unit_no_id_index]}'
+                uwr_unique_Field_value = f'{feature.attributes()[uwr_unique_index]}'
                 flightPTUwrSet.add(uwr_unique_Field_value)
                 #feedback.setProgressText(f'{uwr_unique_Field_value} added and updated')
 
@@ -2798,7 +2797,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             # ==============================================================
             uwr_notmasked_List = []
 
-            for uwr in uwrSet:
+            for uwr in flightPTUwrSet:
                 nameUWR = replaceNonAlphaNum(uwr, "_")
                 points_aglViewshed = 'points_aglViewshed' + nameUWR
                 uwr_notmasked = 'notMasked' + nameUWR
