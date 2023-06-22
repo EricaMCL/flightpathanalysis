@@ -192,7 +192,6 @@ def findBufferRange(UseToErasePath, ToErasePath, uniqueIDFields, delFolder, buff
 def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_unique_Field, tempFolder, DEM, viewshed,
                  minElevViewshed):
     UWR_noBuffer = 'UWR_noBuffer'
-    UWRVertices = 'UWRVertices'
     UWR_Buffer = 'UWR_Buffer'
 
     # ==============================================================

@@ -2194,8 +2194,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                     uwrBuffered = processing.run("native:mergevectorlayers",
                                            {'LAYERS': requireMergeBufferList,
                                             'OUTPUT': uwrBufferedPath + '_updated'})['OUTPUT']
-                    os.remove(uwrBufferedPath + '.gpkg')
-                    os.rename(final, uwrBufferedPath + '.gpkg')
+                    uwrBufferedPath =  uwrBufferedPath + '_updated.gpkg'
                     feedback.setProgressText('final geopackage exists')
                 else:
                     uwrBuffered = processing.run("native:mergevectorlayers",
@@ -2215,9 +2214,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             feedback.setProgressText(f'{e}')
 
         finally:
-            #shutil.rmtree(delFolder)
-            #feedback.setProgressText(f'{delFolder} deleted')
-            feedback.setProgressText('Completed')
+            feedback.setProgressText('============================== Completed - Create UWR Buffer ==============================')
 
         # ===========================================================================
         # Step.2 Flightpath conversion
@@ -2710,7 +2707,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             lyr = QgsVectorLayer(allFlightPointsStats_final, 'allFlightPointStats', "ogr")
 
             QgsVectorFileWriter.writeAsVectorFormat(lyr, statsPath ,"utf-8",driverName = "XLSX", layerOptions = ['GEOMETRY=AS_XYZ'])
-            feedback.setProgressText('---Process completed successfully---')
+            feedback.setProgressText('============================== Completed - Flightpath Conversion ==============================')
 
         except QgsException as e:
             feedback.setProgressText('Something is wrong - step2')
@@ -2959,6 +2956,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             lyr = QgsVectorLayer(LOS_finalPointsStats_fieldMapping, 'LOS_finalPointsStats', "ogr")
             QgsVectorFileWriter.writeAsVectorFormat(lyr, finalStatsPath, "utf-8", driverName="XLSX", layerOptions=['GEOMETRY=AS_XYZ'])
 
+            feedback.setProgressText('============================== Completed LOS  ==============================')
             feedback.setProgressText('---Process completed successfully---')
 
         except QgsException as e:
