@@ -2001,6 +2001,17 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                 feedback.setProgressText('No need to fix')
                 origUWR = origUWR_source
 
+
+            # ==============================================================
+            # Reproject the origUWR (to fit with the DEM )
+            # ==============================================================
+            rePrjUWR = processing.run("native:reprojectlayer", {
+                'INPUT': origUWR,
+                'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:3005'),
+                'OPERATION': '+proj=pipeline +step +inv +proj=utm +zone=10 +ellps=GRS80 +step +proj=aea +lat_0=45 +lon_0=-126 +lat_1=50 +lat_2=58.5 +x_0=1000000 +y_0=0 +ellps=GRS80',
+                'OUTPUT': 'TEMPORARY_OUTPUT'})
+
+            origUWR = rePrjUWR
             # ==============================================================
             # Get list of relevant UWR
             # ==============================================================
@@ -2194,7 +2205,6 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                     uwrBuffered = processing.run("native:mergevectorlayers",
                                            {'LAYERS': requireMergeBufferList,
                                             'OUTPUT': uwrBufferedPath + '_updated'})['OUTPUT']
-                    uwrBufferedPath =  uwrBufferedPath + '_updated.gpkg'
                     feedback.setProgressText('final geopackage exists')
                 else:
                     uwrBuffered = processing.run("native:mergevectorlayers",
@@ -2607,7 +2617,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             # ===========================================================================
 
             uwr_fieldMapping = processing.run("native:refactorfields",
-                                              {'INPUT': uwrBufferedPath + '.gpkg',
+                                              {'INPUT': uwrBuffered,
                                                'FIELDS_MAPPING': [
                                                    {'expression': f"{unit_no}", 'length': 14, 'name': f'{unit_no}','precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
                                                    {'expression': f"{unit_no_id}", 'length': 14, 'name': f'{unit_no_id}','precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
