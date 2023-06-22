@@ -1734,7 +1734,7 @@ class finalPointsStats(QgsProcessingAlgorithm):
             # unit_unique_field, field that combines uwr number and uwr unit number
             # ==============================================================
             unit_no = "UWR_NUMBER"
-            unit_no_id = "UWR_UNIT_N"
+            unit_no_id = "UWR_UNIT_NUMBER"
             uwr_unique_Field = "uwr_unique"
 
             LOS_finalPointsStats_temp = processing.run("qgis:statisticsbycategories", {
@@ -1745,18 +1745,18 @@ class finalPointsStats(QgsProcessingAlgorithm):
                 'OUTPUT': os.path.join(delFolder, 'LOS_statsTemp')})['OUTPUT']
 
             LOS_finalPointsStats_fieldMapping = processing.run("native:refactorfields",
-                                                        {'INPUT':LOS_finalPointsStats_temp,
-                                                         'FIELDS_MAPPING':[
-                                                             {'expression': '"NameTkline"','length': 21,'name': 'NameTkline','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"FlightName"','length': 34,'name': 'FlightName','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"TotalTime"','length': 0,'name': 'TotalTime','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
-                                                             {'expression': '"HeightRange"','length': 100,'name': 'HeightRange','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"UWR_NUMBER"','length': 14,'name': 'UWR_NUMBER','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"UWR_UNIT_N"','length': 14,'name': 'UWR_UNIT_NUMBER','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"BUFF_DIST"','length': 0,'name': 'BUFF_DIST','precision': 0,'sub_type': 0,'type': 6,'type_name': 'double precision'},
-                                                             {'expression': '"IncursionSeverity"','length': 100,'name': 'IncursionSeverity','precision': 0,'sub_type': 0,'type': 10,'type_name': 'text'},
-                                                             {'expression': '"sum"','length': 0,'name': 'TInterval','precision': 0,'sub_type': 0,'type': 2,'type_name': 'integer'}],
-                                                         'OUTPUT':os.path.join(delFolder, 'tempStats')})['OUTPUT']
+                                                               {'INPUT': LOS_finalPointsStats_temp,
+                                                                'FIELDS_MAPPING': [
+                                                                    {'expression': '"NameTkline"', 'length': 50, 'name': 'NameTkline', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"FlightName"', 'length': 34, 'name': 'FlightName', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"TotalTime"', 'length': 0, 'name': 'TotalTime', 'precision': 0, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
+                                                                    {'expression': '"HeightRange"', 'length': 100, 'name': 'HeightRange', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"UWR_NUMBER"', 'length': 14, 'name': 'UWR_NUMBER', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"UWR_UNIT_NUMBER"', 'length': 14, 'name': 'UWR_UNIT_NUMBER', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"BUFF_DIST"', 'length': 0, 'name': 'BUFF_DIST', 'precision': 0, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
+                                                                    {'expression': '"IncursionSeverity"', 'length': 100, 'name': 'IncursionSeverity', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"sum"', 'length': 0, 'name': 'TotalTimeIncursion', 'precision': 0, 'sub_type': 0, 'type': 2, 'type_name': 'integer'}],
+                                                                'OUTPUT': os.path.join(delFolder, 'tempStats')})['OUTPUT']
 
 
             lyr = QgsVectorLayer(LOS_finalPointsStats_fieldMapping, 'LOS_finalPointsStats', "ogr")
@@ -1936,8 +1936,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
         DEM = parameters['DEM']
         existedViewshed = parameters['viewshed']
         existedMinElevViewshed = parameters['minElevViewshed']
-        bufferDistList = [int(0),int(parameters['buffDistIS_high']), int(parameters['buffDistIS_moderate']),
-                          int(parameters['buffDistIS_low'])]
+        bufferDistList = [int(parameters['buffDistIS_high']), int(parameters['buffDistIS_moderate']), int(parameters['buffDistIS_low'])]
         incursionSeverity = {int(0): "In UWR", int(parameters['buffDistIS_high']): "High", int(parameters['buffDistIS_moderate']): "Moderate",
                           int(parameters['buffDistIS_low']): "Low"}
 
@@ -1981,9 +1980,6 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             else:
                 os.mkdir(delFolder)
 
-
-            bufferDistList = [int(parameters['buffDistIS_high']), int(parameters['buffDistIS_moderate']),
-                              int(parameters['buffDistIS_low'])]
             feedback.setProgressText(str(bufferDistList))
 
             # ===========================================================================
@@ -2002,7 +1998,6 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                 origUWR = fixGeom['OUTPUT']
 
             else:
-                #fixGeom = processing.run("native:fixgeometries",{'INPUT': parameters['origUWR'], 'OUTPUT': 'TEMPORARY_OUTPUT'})
                 feedback.setProgressText('No need to fix')
                 origUWR = origUWR_source
 
@@ -2017,7 +2012,6 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             for feature in origUWR.getFeatures():
                 uwr_unique_Field_value = f'{feature.attributes()[unit_no_index]}__{feature.attributes()[unit_no_id_index]}'
                 uwrSet.add(uwr_unique_Field_value)
-                #feedback.setProgressText(f'{uwr_unique_Field_value} added and updated')
 
             feedback.setProgressText(f'{uwr_unique_Field} added and updated')
             feedback.setProgressText(f'{uwrSet} added and updated')
@@ -2213,6 +2207,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
 
 
             else:
+                uwrBuffered = uwrBufferedPath + '.gpkg'
                 feedback.setProgressText(f'No Need to create uwr buffers')
 
         except QgsException as e:
@@ -2742,7 +2737,6 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             for feature in allFlightPointslyr.getFeatures():
                 uwr_unique_Field_value = f'{feature.attributes()[unit_no_index]}__{feature.attributes()[unit_no_id_index]}'
                 flightPTUwrSet.add(uwr_unique_Field_value)
-                #feedback.setProgressText(f'{uwr_unique_Field_value} added and updated')
 
             feedback.setProgressText(f'{uwr_unique_Field} added and updated')
             feedback.setProgressText(f'{flightPTUwrSet} added and updated')
@@ -2798,7 +2792,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             # ==============================================================
             uwr_notmasked_List = []
 
-            for uwr in uwrSet:
+            for uwr in flightPTUwrSet:
                 nameUWR = replaceNonAlphaNum(uwr, "_")
                 points_aglViewshed = 'points_aglViewshed' + nameUWR
                 uwr_notmasked = 'notMasked' + nameUWR
@@ -2951,41 +2945,19 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             LOS_finalPointsStats_fieldMapping = processing.run("native:refactorfields",
                                                                {'INPUT': LOS_finalPointsStats_temp,
                                                                 'FIELDS_MAPPING': [
-                                                                    {'expression': '"NameTkline"', 'length': 21,
-                                                                     'name': 'NameTkline', 'precision': 0,
-                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
-                                                                    {'expression': '"FlightName"', 'length': 34,
-                                                                     'name': 'FlightName', 'precision': 0,
-                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
-                                                                    {'expression': '"TotalTime"', 'length': 0,
-                                                                     'name': 'TotalTime', 'precision': 0, 'sub_type': 0,
-                                                                     'type': 6, 'type_name': 'double precision'},
-                                                                    {'expression': '"HeightRange"', 'length': 100,
-                                                                     'name': 'HeightRange', 'precision': 0,
-                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
-                                                                    {'expression': '"UWR_NUMBER"', 'length': 14,
-                                                                     'name': 'UWR_NUMBER', 'precision': 0,
-                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
-                                                                    {'expression': '"UWR_UNIT_N"', 'length': 14,
-                                                                     'name': 'UWR_UNIT_NUMBER', 'precision': 0,
-                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
-                                                                    {'expression': '"BUFF_DIST"', 'length': 0,
-                                                                     'name': 'BUFF_DIST', 'precision': 0, 'sub_type': 0,
-                                                                     'type': 6, 'type_name': 'double precision'},
-                                                                    {'expression': '"IncursionSeverity"', 'length': 100,
-                                                                     'name': 'IncursionSeverity', 'precision': 0,
-                                                                     'sub_type': 0, 'type': 10, 'type_name': 'text'},
-                                                                    {'expression': '"sum"', 'length': 0,
-                                                                     'name': 'TInterval', 'precision': 0, 'sub_type': 0,
-                                                                     'type': 2, 'type_name': 'integer'}],
-                                                                'OUTPUT': os.path.join(delFolder, 'tempStats')})[
-                'OUTPUT']
+                                                                    {'expression': '"NameTkline"', 'length': 50, 'name': 'NameTkline', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"FlightName"', 'length': 34, 'name': 'FlightName', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"TotalTime"', 'length': 0, 'name': 'TotalTime', 'precision': 0, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
+                                                                    {'expression': '"HeightRange"', 'length': 100, 'name': 'HeightRange', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"UWR_NUMBER"', 'length': 14, 'name': 'UWR_NUMBER', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"UWR_UNIT_NUMBER"', 'length': 14, 'name': 'UWR_UNIT_NUMBER', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"BUFF_DIST"', 'length': 0, 'name': 'BUFF_DIST', 'precision': 0, 'sub_type': 0, 'type': 6, 'type_name': 'double precision'},
+                                                                    {'expression': '"IncursionSeverity"', 'length': 100, 'name': 'IncursionSeverity', 'precision': 0, 'sub_type': 0, 'type': 10, 'type_name': 'text'},
+                                                                    {'expression': '"sum"', 'length': 0, 'name': 'TotalTimeIncursion', 'precision': 0, 'sub_type': 0, 'type': 2, 'type_name': 'integer'}],
+                                                                'OUTPUT': os.path.join(delFolder, 'tempStats')})['OUTPUT']
 
             lyr = QgsVectorLayer(LOS_finalPointsStats_fieldMapping, 'LOS_finalPointsStats', "ogr")
-
-            QgsVectorFileWriter.writeAsVectorFormat(lyr, finalStatsPath, "utf-8", driverName="XLSX",
-                                                    layerOptions=['GEOMETRY=AS_XYZ'])
-
+            QgsVectorFileWriter.writeAsVectorFormat(lyr, finalStatsPath, "utf-8", driverName="XLSX", layerOptions=['GEOMETRY=AS_XYZ'])
 
             feedback.setProgressText('---Process completed successfully---')
 
