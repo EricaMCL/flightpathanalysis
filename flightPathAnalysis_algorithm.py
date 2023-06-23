@@ -2003,16 +2003,6 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
 
 
             # ==============================================================
-            # Reproject the origUWR (to fit with the DEM )
-            # ==============================================================
-            rePrjUWR = processing.run("native:reprojectlayer", {
-                'INPUT': origUWR,
-                'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:3005'),
-                'OPERATION': '+proj=pipeline +step +inv +proj=utm +zone=10 +ellps=GRS80 +step +proj=aea +lat_0=45 +lon_0=-126 +lat_1=50 +lat_2=58.5 +x_0=1000000 +y_0=0 +ellps=GRS80',
-                'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
-
-            origUWR = rePrjUWR
-            # ==============================================================
             # Get list of relevant UWR
             # ==============================================================
             origUWRFieldList = origUWR.fields().names()
@@ -2218,6 +2208,18 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             else:
                 uwrBuffered = uwrBufferedPath + '.gpkg'
                 feedback.setProgressText(f'No Need to create uwr buffers')
+
+            # ==============================================================
+            # Reproject the origUWR (to fit with the DEM )
+            # ==============================================================
+            rePrjUWR = processing.run("native:reprojectlayer", {
+                'INPUT': uwrBuffered,
+                'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:3005'),
+                'OPERATION': '+proj=pipeline +step +inv +proj=utm +zone=10 +ellps=GRS80 +step +proj=aea +lat_0=45 +lon_0=-126 +lat_1=50 +lat_2=58.5 +x_0=1000000 +y_0=0 +ellps=GRS80',
+                'OUTPUT': uwrBufferedPath + '_CS3005'})['OUTPUT']
+
+            uwrBuffered = rePrjUWR
+            feedback.setProgressText(f'Reproject the origUWR (to fit with the DEM )')
 
         except QgsException as e:
             feedback.setProgressText('Something is wrong')
