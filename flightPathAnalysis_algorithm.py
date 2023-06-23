@@ -2009,7 +2009,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                 'INPUT': origUWR,
                 'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:3005'),
                 'OPERATION': '+proj=pipeline +step +inv +proj=utm +zone=10 +ellps=GRS80 +step +proj=aea +lat_0=45 +lon_0=-126 +lat_1=50 +lat_2=58.5 +x_0=1000000 +y_0=0 +ellps=GRS80',
-                'OUTPUT': 'TEMPORARY_OUTPUT'})
+                'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
             origUWR = rePrjUWR
             # ==============================================================
