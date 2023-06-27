@@ -2892,10 +2892,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
 
                 if len(points_aglViewshed_NumSet) == 0:
                     finalSQL = None
-                    uwr_notmasked_selected = processing.run("native:extractbyexpression",
-                                                        {'EXPRESSION': finalSQL,
-                                                         'INPUT': poisAglViewshed,
-                                                         'OUTPUT': os.path.join(delFolder, uwr_notmasked)})['OUTPUT']
+                    uwr_notmasked_selected = poisAglViewshed
                     uwr_notmasked_List.append(uwr_notmasked_selected)
                     feedback.setProgressText(f'{uwr_notmasked_selected}')
                 else:
@@ -2911,17 +2908,23 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                     uwr_notmasked_List.append(uwr_notmasked_selected)
                     feedback.setProgressText(f'{uwr_notmasked_selected}')
 
-
             # ==============================================================
             # Create final layer of all points that aren't terrain masked
             # ==============================================================
-            if len(uwr_notmasked_List) != 0:
+            if len(uwr_notmasked_List) >= 2:
                 nonTerrainMaskedPoi_merge = processing.run("native:mergevectorlayers",
                                                {'LAYERS': uwr_notmasked_List,
                                                 'CRS': None,
                                                 'OUTPUT': os.path.join(projectFolder, 'LOS_uwrFlightPoints')})['OUTPUT']
-            else:
+            elif len(uwr_notmasked_List) == 1:
                 nonTerrainMaskedPoi_merge = uwr_notmasked_List[0]
+
+
+            else:
+                feedback.setProgressText('No Terrain masked point found')
+
+                exit()
+
 
             feedback.setProgressText('Merged all non terrain masked points together')
 

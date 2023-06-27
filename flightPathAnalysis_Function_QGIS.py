@@ -477,10 +477,14 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
     viewshed_final = processing.run("native:mergevectorlayers",
                                     {'LAYERS': viewshedList,
                                     'OUTPUT': os.path.join(projectFolder, 'viewshed')})['OUTPUT']
-    minElevViewshed_final = processing.run("native:mergevectorlayers",
+    minElevViewshed_temp = processing.run("native:mergevectorlayers",
                                            {'LAYERS': minElevViewshedList,
-                                            'OUTPUT': os.path.join(projectFolder,'minElevViewshed')})['OUTPUT']
+                                            'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
+    minElevViewshed_final  = processing.run("native:fieldcalculator", {
+        'INPUT': minElevViewshed_temp ,
+        'FIELD_NAME': 'gridcode', 'FIELD_TYPE': 1, 'FIELD_LENGTH': 100, 'FIELD_PRECISION': 0, 'FORMULA': '"VALUE"',
+        'OUTPUT': os.path.join(projectFolder,'minElevViewshed')})
     for feature in viewshed_delPath or minElevViewshed_delPath:
         try:
             os.remove(feature)
