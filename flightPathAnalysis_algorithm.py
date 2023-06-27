@@ -2886,13 +2886,18 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                     agl_attribute = feature.attributes()[aglIndex]
                     valueIndex = poisAglViewshedLyr_fields.index('VALUE')
                     value_attribute = feature.attributes()[valueIndex]
-                    if type(value_attribute) is not None and agl_attribute < value_attribute:
+                    if value_attribute >= 0 and agl_attribute < value_attribute:
                         points_aglViewshed_NumSet.add(str(fid_attribute))
                 #feedback.setProgressText(f'points_aglViewshed_NumSet: {points_aglViewshed_NumSet}')
 
                 if len(points_aglViewshed_NumSet) == 0:
                     finalSQL = None
-
+                    uwr_notmasked_selected = processing.run("native:extractbyexpression",
+                                                        {'EXPRESSION': finalSQL,
+                                                         'INPUT': poisAglViewshed,
+                                                         'OUTPUT': os.path.join(delFolder, uwr_notmasked)})['OUTPUT']
+                    uwr_notmasked_List.append(uwr_notmasked_selected)
+                    feedback.setProgressText(f'{uwr_notmasked_selected}')
                 else:
                     terrainMaskPoi = ','.join(points_aglViewshed_NumSet)
                     finalSQL = "fid NOT IN (" + terrainMaskPoi + ")"

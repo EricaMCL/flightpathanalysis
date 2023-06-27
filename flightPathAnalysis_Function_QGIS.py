@@ -333,7 +333,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                      'KEEP_RESOLUTION': True, 'SET_RESOLUTION': False, 'X_RESOLUTION': None,
                                      'Y_RESOLUTION': None, 'MULTITHREADING': False,
                                      'OPTIONS': '', 'DATA_TYPE': 0, 'EXTRA': '',
-                                     'OUTPUT': os.path.join(tempFolder, f'dem_{name_uwr}.tif')})['OUTPUT']
+                                     'OUTPUT': os.path.join(tempFolder, f'{BufferUWR_DEMClip}.tif')})['OUTPUT']
 
         # ==============================================================
         # Clip DEM using original uwr range
@@ -355,7 +355,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                           'KEEP_RESOLUTION': True, 'SET_RESOLUTION': False, 'X_RESOLUTION': None,
                                           'Y_RESOLUTION': None, 'MULTITHREADING': False,
                                           'OPTIONS': '', 'DATA_TYPE': 0, 'EXTRA': '',
-                                          'OUTPUT': os.path.join(tempFolder, f'dem_{name_uwr}_orig.tif')})['OUTPUT']
+                                          'OUTPUT': os.path.join(tempFolder, f'{UWR_DEMClip}.tif')})['OUTPUT']
 
         # ==============================================================
         # Convert original clipped DEM to points
@@ -378,7 +378,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         for feature in vertice_Selected_lyr.getFeatures():
             DEMValue_Index = (vertice_Selected_lyr.fields().names()).index('DEMElev')
             DEMvalue = feature.attributes()[DEMValue_Index]
-            if DEMvalue < minValue and not None:
+            if DEMvalue > 0 and DEMvalue < minValue:
                 minValue = DEMvalue
 
         UWRDEMpoi_Selected = processing.run("native:extractbyexpression",
@@ -417,7 +417,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
                                          {'ANALYSIS_TYPE': 1,
                                           'OBSERVER_POINTS': viewPoints,
                                           'DEM': demClipped,
-                                          'USE_CURVATURE': False, 'REFRACTION': 0.13, 'OPERATOR': 0,
+                                          'USE_CURVATURE': False, 'REFRACTION': 0.13, 'OPERATOR': 1,
                                           'OUTPUT': os.path.join(tempFolder, agl_rasterViewshed + '.tif')})['OUTPUT']
 
         viewshedRasToPoly = processing.run("native:pixelstopolygons",
