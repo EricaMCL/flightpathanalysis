@@ -2842,7 +2842,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                 feedback.setProgressText(f'{expression}')
 
                 minElevViewshedLyr_selected = processing.run("native:extractbyexpression",
-                                                     {'EXPRESSION': expression + " AND (VALUE <> 0)",
+                                                     {'EXPRESSION': expression + " AND (gridcode <> 0)",
                                                       'INPUT': minElevViewshedLyr,
                                                       'OUTPUT': os.path.join(delFolder, 'vhSelected' + uwr)})['OUTPUT']
                 feedback.setProgressText(f'minElevViewshed_Lyr_selected')
@@ -2884,7 +2884,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                     fid_attribute = feature.attributes()[fidIndex]
                     aglIndex = poisAglViewshedLyr_fields.index('AGL')
                     agl_attribute = feature.attributes()[aglIndex]
-                    valueIndex = poisAglViewshedLyr_fields.index('VALUE')
+                    valueIndex = poisAglViewshedLyr_fields.index('gridcode')
                     value_attribute = feature.attributes()[valueIndex]
                     if value_attribute >= 0 and agl_attribute < value_attribute:
                         points_aglViewshed_NumSet.add(str(fid_attribute))
@@ -2932,7 +2932,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
             # Get count of points that are in direct viewshed
             # ==============================================================
             LOS_uwrFlightPoints_selected = processing.run("native:extractbyexpression",
-                                                    {'EXPRESSION': " VALUE is Null ",
+                                                    {'EXPRESSION': " gridcode is Null ",
                                                      'INPUT': nonTerrainMaskedPoi_merge,
                                                      'OUTPUT': os.path.join(projectFolder, 'LOS_uwrFlightPoints_selected')})['OUTPUT']
 
