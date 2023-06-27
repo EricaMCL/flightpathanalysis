@@ -484,7 +484,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
     minElevViewshed_final  = processing.run("native:fieldcalculator", {
         'INPUT': minElevViewshed_temp ,
         'FIELD_NAME': 'gridcode', 'FIELD_TYPE': 1, 'FIELD_LENGTH': 100, 'FIELD_PRECISION': 0, 'FORMULA': '"VALUE"',
-        'OUTPUT': os.path.join(projectFolder,'minElevViewshed')})
+        'OUTPUT': os.path.join(projectFolder,'minElevViewshed')})['OUTPUT']
     for feature in viewshed_delPath or minElevViewshed_delPath:
         try:
             os.remove(feature)
