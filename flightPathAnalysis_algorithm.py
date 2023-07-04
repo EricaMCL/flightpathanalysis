@@ -49,7 +49,8 @@ from qgis.core import (QgsProcessing,
                        QgsVectorLayer,
                        QgsCoordinateReferenceSystem,
                        QgsVectorFileWriter,
-                       QgsException)
+                       QgsException,
+                       QgsProject)
 import glob
 import os
 
@@ -382,7 +383,8 @@ class createUWRBuffer(QgsProcessingAlgorithm):
                     for f in requireMergeBufferList:
                         feedback.setProgressText(f'{f} merged')
 
-
+                finalLyr = QgsVectorLayer(final, 'uwrBuffered', "ogr")
+                QgsProcessing.instance().addMapLayer(finalLyr)
             else:
                 feedback.setProgressText(f'No Need to create uwr buffers')
 
