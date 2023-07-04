@@ -2320,6 +2320,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                     for f in features:
                         timeValue = f.attributes()[tkptExtractedTimeIndex]
                         values.append(timeValue)
+                        feedback.setProgressText(values)
                     timeInterval = values[1].toTime_t() - values[0].toTime_t()
                     totalFlightTime = rowCount * timeInterval
                     feedback.setProgressText(f'The total flight time of {gpxFormattedName} is {totalFlightTime} seconds')
