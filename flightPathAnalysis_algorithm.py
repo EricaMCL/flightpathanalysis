@@ -62,21 +62,17 @@ from pathlib import Path
 
 class createUWRBuffer(QgsProcessingAlgorithm):
     """
-    This is an example algorithm that takes a vector layer and
-    creates a new identical one.
-
-    It is meant to be used as an example of how to create your own
-    algorithms and explain methods and variables used to do it. An
-    algorithm like this will be available in all elements, and there
-    is not need for additional work.
-
-    All Processing algorithms should extend the QgsProcessingAlgorithm
-    class.
+    Create donut buffers of input UWR polygons with buffers in bufferDistList from the original UWR layer, if the final
+    buffer layer existed in the project folder, only the uwr in the original uwr layer but not in the final layer will
+    be buffered and added to the final layer. If the final layer doesn't exist, a new one will be made
     """
 
-    # Constants used to refer to parameters and outputs. They will be
-    # used when calling the algorithm from another algorithm, or when
-    # calling from the QGIS console.
+    # eg. bufferDistList = [500,1000,1500]
+    # Outputs:
+    # 500m buffer polygon = the 500m donut shape outsides of the uwr polygon. (0-500m buffer area)
+    # 1000m buffer polygon = the 500m donut shape outsides of the 500m buffer polygon. (500-1000m buffer area)
+    # 1500m buffer polygon = the 500m donut shape outsides of the 1000m buffer polygon. (1000-1500m buffer area)
+
 
     origUWR = 'origUWR'
     projectFolder = 'projectFolder'
@@ -88,8 +84,7 @@ class createUWRBuffer(QgsProcessingAlgorithm):
 
     def initAlgorithm(self, config):
         """
-        Here we define the inputs and output of the algorithm, along
-        with some other properties.
+        User input parameters
         """
         # ===========================================================================
         # OrigUWR - Input vector polygon
@@ -132,9 +127,9 @@ class createUWRBuffer(QgsProcessingAlgorithm):
         # to uniquely identify the feature sink, and must be included in the
         # dictionary returned by the processAlgorithm function.
         origUWR_source = self.parameterAsSource(parameters, self.origUWR, context)
-        origUWR = parameters['origUWR']
+        origUWRPath = parameters['origUWR']
+        origUWR = None
         projectFolder = parameters['projectFolder']
-        feedback.setProgressText(str(origUWR))
         uwrBufferedPath = os.path.join(projectFolder, 'uwrBuffered')
         delFolder = os.path.join(projectFolder, 'delFolder')
         final = None
@@ -167,7 +162,7 @@ class createUWRBuffer(QgsProcessingAlgorithm):
             # Check if the input vector includes invalid geometry
             # ===========================================================================
             result = processing.run("qgis:checkvalidity", {
-                'INPUT_LAYER': parameters['origUWR']})
+                'INPUT_LAYER':origUWRPath})
             errorCount = result['ERROR_COUNT']
             feedback.setProgressText(str(errorCount))
 
@@ -176,17 +171,14 @@ class createUWRBuffer(QgsProcessingAlgorithm):
             # ===========================================================================
             if errorCount > 0:
                 fixGeom = processing.run("native:fixgeometries",
-                                         {'INPUT': parameters['origUWR'],
+                                         {'INPUT': origUWRPath,
                                           'OUTPUT': 'TEMPORARY_OUTPUT'})
                 feedback.setProgressText('Geometry fixed')
                 origUWR = fixGeom['OUTPUT']
 
             else:
-                fixGeom = processing.run("native:fixgeometries",
-                                         {'INPUT': parameters['origUWR'],
-                                          'OUTPUT': 'TEMPORARY_OUTPUT'})
-                feedback.setProgressText('Geometry fixed')
-                origUWR = fixGeom['OUTPUT']
+                feedback.setProgressText('No need to fix geometry')
+                origUWR = origUWR_source
 
 
             # ==============================================================
@@ -200,7 +192,6 @@ class createUWRBuffer(QgsProcessingAlgorithm):
             for feature in origUWR.getFeatures():
                 uwr_unique_Field_value = f'{feature.attributes()[unit_no_index]}__{feature.attributes()[unit_no_id_index]}'
                 uwrSet.add(uwr_unique_Field_value)
-                #feedback.setProgressText(f'{uwr_unique_Field_value} added and updated')
 
             feedback.setProgressText(f'{uwr_unique_Field} added and updated')
             feedback.setProgressText(f'{uwrSet} added and updated')
@@ -382,9 +373,8 @@ class createUWRBuffer(QgsProcessingAlgorithm):
                     final = processing.run("native:mergevectorlayers",
                                            {'LAYERS': requireMergeBufferList,
                                             'OUTPUT': uwrBufferedPath + '_updated'})['OUTPUT']
-                    os.remove(uwrBufferedPath + '.gpkg')
-                    os.rename(final, uwrBufferedPath + '.gpkg')
                     feedback.setProgressText('final geopackage exists')
+
                 else:
                     final = processing.run("native:mergevectorlayers",
                                            {'LAYERS': requireMergeBufferList,
