@@ -2289,7 +2289,7 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                                              'NEW_FIELD': True,
                                              'FIELD_PRECISION': 0,
                                              'FIELD_TYPE': 0,
-                                             'FORMULA': '@id',
+                                             'FORMULA': '$id',
                                              'INPUT': gpxFile + gpxDict['tkpt'],
                                              'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
                 query = None
@@ -2320,7 +2320,6 @@ class flightPathAnalysis(QgsProcessingAlgorithm):
                     for f in features:
                         timeValue = f.attributes()[tkptExtractedTimeIndex]
                         values.append(timeValue)
-                        feedback.setProgressText(values)
                     timeInterval = values[1].toTime_t() - values[0].toTime_t()
                     totalFlightTime = rowCount * timeInterval
                     feedback.setProgressText(f'The total flight time of {gpxFormattedName} is {totalFlightTime} seconds')

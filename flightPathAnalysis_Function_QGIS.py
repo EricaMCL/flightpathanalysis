@@ -402,7 +402,7 @@ def makeViewshed(uwrList, uwrBuffered, buffDistance, unit_no, unit_no_id, uwr_un
         viewPoints = processing.run("visibility:createviewpoints", {
             'OBSERVER_POINTS': UWRVertices_merge,
             'DEM': demClipped, 'OBSERVER_ID': '',
-            'RADIUS': 1500, 'RADIUS_FIELD': '', 'OBS_HEIGHT': 1.6, 'OBS_HEIGHT_FIELD': 'DEMElev', 'TARGET_HEIGHT': 0,
+            'RADIUS': 5000, 'RADIUS_FIELD': '', 'OBS_HEIGHT': 1, 'OBS_HEIGHT_FIELD': 'DEMElev', 'TARGET_HEIGHT': 0,
             'TARGET_HEIGHT_FIELD': '', 'RADIUS_IN_FIELD': '', 'AZIM_1_FIELD': '', 'AZIM_2_FIELD': '',
             'ANGLE_UP_FIELD': '', 'ANGLE_DOWN_FIELD': '', 'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
 
