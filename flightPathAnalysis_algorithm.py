@@ -384,9 +384,10 @@ class createUWRBuffer(QgsProcessingAlgorithm):
                         feedback.setProgressText(f'{f} merged')
 
                 finalLyr = QgsVectorLayer(final, 'uwrBuffered', "ogr")
-                QgsProcessing.instance().addMapLayer(finalLyr)
+                QgsProject.instance().addMapLayer(finalLyr)
             else:
                 feedback.setProgressText(f'No Need to create uwr buffers')
+                QgsProject.instance().addMapLayer(uwrBuffered_layer)
 
         except QgsException as e:
             feedback.setProgressText('Something is wrong')
@@ -630,7 +631,7 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                              'NEW_FIELD': True,
                                              'FIELD_PRECISION': 0,
                                              'FIELD_TYPE': 0,
-                                             'FORMULA': '@id',
+                                             'FORMULA': '$id',
                                              'INPUT': gpxFile + gpxDict['tkpt'],
                                              'OUTPUT': 'TEMPORARY_OUTPUT'})['OUTPUT']
                 query = None
@@ -1022,6 +1023,8 @@ class flightPathConvert(QgsProcessingAlgorithm):
                                             'INPUT': incursionSeverityField,
                                             'OUTPUT': os.path.join(projectFolder, name)})['OUTPUT']
                 feedback.setProgressText(f'{diffISlyr} created')
+            allFLightPoints = QgsVectorLayer((incursionSeverityField), "allFlightPoints", "ogr")
+            QgsProject.instance().addMapLayer(allFLightPoints)
             feedback.setProgressText('---Process completed successfully---')
 
         except QgsException as e:
